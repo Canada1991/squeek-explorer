@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Squeek Explorer</title>
+<meta name="description" content="Live hamster, block height, SQK issuance and wallet lookup for Squeekchain (Sepolia).">
+<style>
+:root{--bg:#121216;--card:#1b1b22;--line:#2a2a33;--fg:#ececf1;--mut:#8b8b98;--gold:#f2c14e;--blue:#6aa8ff;--ok:#4ade80;--bad:#f87171}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#f6f6f8;--card:#fff;--line:#e3e3ea;--fg:#16161c;--mut:#666673;--gold:#b7860b;--blue:#2563eb;--ok:#15803d;--bad:#b91c1c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+main{max-width:980px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:.5px}h1 span{color:var(--gold)}
+.sub{color:var(--mut);margin:0 0 24px;font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.k{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:1px}
+.v{font-size:24px;margin-top:4px;word-break:break-all}
+.s{color:var(--mut);font-size:12px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--mut)}
+.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+h2{font-size:14px;text-transform:uppercase;letter-spacing:1.5px;color:var(--mut);margin:30px 0 10px}
+form{display:flex;gap:8px;flex-wrap:wrap}
+input{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);color:var(--fg);padding:10px 12px;border-radius:8px;font:inherit}
+button{background:var(--gold);color:#111;border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+td:first-child{color:var(--mut);white-space:nowrap}
+a{color:var(--blue);text-decoration:none}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;background:var(--gold)}
+.err{color:var(--bad)}
+footer{margin-top:40px;color:var(--mut);font-size:12px}
+</style>
+</head>
+<body>
+<main>
+<h1>🐹 Squeek <span>Explorer</span></h1>
+<p class="sub">Live view of Squeekchain on Sepolia: the hamster, the chain, SQK and your wallet. Auto-refreshes every 15s.</p>
+
+<div class="grid">
+  <div class="card"><div class="k">Hamster</div><div class="v" id="ham"><span class="dot"></span>…</div><div class="s" id="hamS"></div></div>
+  <div class="card"><div class="k">Block height</div><div class="v" id="h">…</div><div class="bar"><i id="hp" style="width:0"></i></div><div class="s" id="hpS"></div></div>
+  <div class="card"><div class="k">Total work</div><div class="v" id="w">…</div><div class="s" id="wS"></div></div>
+  <div class="card"><div class="k">Settled round</div><div class="v" id="r">…</div><div class="s" id="rS"></div></div>
+  <div class="card"><div class="k">SQK supply</div><div class="v" id="sup">…</div><div class="s">minted by mining checkpoints</div></div>
+  <div class="card"><div class="k">Squeeks (Genesis)</div><div class="v" id="nft">…</div><div class="s">of 9,999</div></div>
+</div>
+
+<h2>Wallet lookup</h2>
+<form id="f"><input id="addr" placeholder="0x… wallet address" autocomplete="off" spellcheck="false"><button>Look up</button></form>
+<div class="grid" id="wal" style="margin-top:12px"></div>
+
+<h2>Latest on-chain activity</h2>
+<div class="card"><table id="ev"><tr><td>loading…</td></tr></table></div>
+
+<footer>Data: <a href="https://api.squeekchain.com/v1/status">api.squeekchain.com</a> + Sepolia RPC. Contracts are read from the API's live identities, not hard-coded. Built for the Squeekchain community.</footer>
+</main>
+
+<script>
+const API='https://api.squeekchain.com', RPC='https://ethereum-sepolia-rpc.publicnode.com', SCAN='https://eth-sepolia.blockscout.com';
+let ids=null;
+const $=id=>document.getElementById(id);
+const fmt=n=>Number(n).toLocaleString('en-US');
+const ago=t=>{const s=(Date.now()-new Date(t))/1e3|0;return s<60?s+'s ago':s<3600?(s/60|0)+'m ago':s<86400?(s/3600|0)+'h ago':(s/86400|0)+'d ago'};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const units=(x,d=18)=>{x=BigInt(x);const w=x/10n**BigInt(d),f=(x%10n**BigInt(d)).toString().padStart(d,'0').slice(0,2);return fmt(w)+(f!=='00'?'.'+f:'')};
+async function j(p){const r=await fetch(API+p);if(!r.ok)throw new Error(p+' '+r.status);return r.json()}
+async function call(to,data){const r=await fetch(RPC,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_call',params:[{to,data},'latest']})});const x=await r.json();if(x.error)throw new Error(x.error.message);return x.result}
+const pad=a=>a.toLowerCase().replace('0x','').padStart(64,'0');
+const SEL={totalSupply:'0x18160ddd',balanceOf:'0x70a08231'};
+
+async function status(){
+  try{
+    const s=await j('/v1/status'), m=s.measurement, a=s.builder.anchor;
+    const live=m.freshness==='online'&&m.rpmMilli>0;
+    $('ham').innerHTML=`<span class="dot ${live?'on':''}"></span>${live?'RUNNING':esc(m.coreStatus||'IDLE')}`;
+    $('hamS').textContent=`${(m.rpmMilli/1000).toFixed(1)} rpm · ${(m.speedMmPerSecond/10).toFixed(1)} cm/s · seen ${ago(m.observedAt)}`;
+    $('h').textContent=fmt(a.blockHeight);
+    const p=Number(a.blockProgress)/1e7;$('hp').style.width=p+'%';$('hpS').textContent=p.toFixed(1)+'% to next block · difficulty '+fmt(a.workPerThousandBlocks);
+    $('w').textContent=fmt(a.cumulativeWork);$('wS').textContent='work units (wheel turns measured)';
+    $('r').textContent=fmt(a.settledThroughRound);$('rS').innerHTML=`<a href="${SCAN}/tx/${esc(a.transactionHash)}" target="_blank">settled ${ago(a.confirmedAt)}</a>`;
+  }catch(e){$('ham').innerHTML='<span class="err">API down</span>'}
+}
+async function events(){
+  try{
+    const e=await j('/v1/events?category=all&limit=15');
+    ids=e.identities;
+    const rows=(e.events||[]).map(x=>{
+      const p=x.payload||{}, t=x.type.replace(/^\w+\./,'').replace(/_/g,' ');
+      let d='';
+      if(p.amountBaseUnits!==undefined)d=units(p.amountBaseUnits)+' SQK';
+      else if(p.workAdded!==undefined)d='round '+p.settledThroughRound+' · +'+p.workAdded+' work';
+      else if(p.tokenId!==undefined)d='Squeek #'+p.tokenId;
+      if(p.account)d+=' · '+p.account.slice(0,6)+'…'+p.account.slice(-4);
+      return `<tr><td>${ago(x.occurredAt)}</td><td>${esc(t)}</td><td>${esc(d)}</td><td><a href="${SCAN}/tx/${esc(x.source.transactionHash)}" target="_blank">tx ↗</a></td></tr>`});
+    $('ev').innerHTML=rows.join('')||'<tr><td>no events</td></tr>';
+    await supply();
+  }catch(err){$('ev').innerHTML='<tr><td class="err">could not load events</td></tr>'}
+}
+async function supply(){
+  if(!ids)return;
+  try{$('sup').textContent=units(await call(ids.token,SEL.totalSupply))}catch{}
+  try{$('nft').textContent=fmt(BigInt(await call(ids.genesis,SEL.totalSupply)))}catch{}
+}
+$('f').onsubmit=async ev=>{
+  ev.preventDefault();
+  const a=$('addr').value.trim();
+  if(!/^0x[0-9a-fA-F]{40}$/.test(a)){$('wal').innerHTML='<div class="card err">Enter a valid 0x address</div>';return}
+  if(!ids)await events();
+  $('wal').innerHTML='<div class="card">reading chain…</div>';
+  history.replaceState(null,'','#'+a);
+  try{
+    const bal=d=>SEL.balanceOf+pad(a);
+    const [sqk,nft,staked]=await Promise.all([call(ids.token,bal()),call(ids.genesis,bal()),
+      call(ids.genesis,SEL.balanceOf+pad(ids.staking.proxy)).catch(()=>null)]);
+    $('wal').innerHTML=`
+      <div class="card"><div class="k">Squeeks held</div><div class="v">${fmt(BigInt(nft))}</div><div class="s">in this wallet (staked ones sit in the staking contract)</div></div>
+      <div class="card"><div class="k">SQK balance</div><div class="v">${units(sqk)}</div><div class="s">testnet SQK</div></div>
+      <div class="card"><div class="k">Network staked</div><div class="v">${staked?fmt(BigInt(staked)):'–'}</div><div class="s">Squeeks deposited in staking</div></div>
+      <div class="card"><div class="k">Explorer</div><div class="v" style="font-size:14px"><a href="${SCAN}/address/${a}" target="_blank">${a.slice(0,8)}…${a.slice(-6)} ↗</a></div></div>`;
+  }catch(e){$('wal').innerHTML='<div class="card err">'+esc(e.message)+'</div>'}
+};
+status();events();setInterval(status,15000);setInterval(events,60000);
+if(location.hash.length===43){$('addr').value=location.hash.slice(1);setTimeout(()=>$('f').requestSubmit(),800)}
+</script>
+</body>
+</html>
