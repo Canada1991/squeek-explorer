@@ -51,6 +51,17 @@ footer{margin-top:40px;color:var(--mut);font-size:12px}
 <form id="f"><input id="addr" placeholder="0x… wallet address" autocomplete="off" spellcheck="false"><button>Look up</button></form>
 <div class="grid" id="wal" style="margin-top:12px"></div>
 
+<h2>Act (your wallet, Sepolia)</h2>
+<div class="card">
+  <form id="cf" onsubmit="return false"><button id="conn">Connect wallet</button><span class="s" id="me" style="align-self:center"></span></form>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+    <button id="bClaim" disabled>Claim staking rewards</button>
+    <button id="bCS" disabled>Claim &amp; stake</button>
+  </div>
+  <form id="sf" style="margin-top:12px"><input id="to" placeholder="send SQK to 0x…" spellcheck="false"><input id="amt" placeholder="amount" style="max-width:140px"><button id="bSend" disabled>Send SQK</button></form>
+  <div class="s" id="tx" style="margin-top:10px">Every action is simulated first; your wallet signs, nothing is stored here.</div>
+</div>
+
 <h2>Latest on-chain activity</h2>
 <div class="card"><table id="ev"><tr><td>loading…</td></tr></table></div>
 
@@ -120,6 +131,38 @@ $('f').onsubmit=async ev=>{
       <div class="card"><div class="k">Network staked</div><div class="v">${staked?fmt(BigInt(staked)):'–'}</div><div class="s">Squeeks deposited in staking</div></div>
       <div class="card"><div class="k">Explorer</div><div class="v" style="font-size:14px"><a href="${SCAN}/address/${a}" target="_blank">${a.slice(0,8)}…${a.slice(-6)} ↗</a></div></div>`;
   }catch(e){$('wal').innerHTML='<div class="card err">'+esc(e.message)+'</div>'}
+};
+let me=null;
+const eth=window.ethereum;
+const say=h=>$('tx').innerHTML=h;
+const wei=s=>{const [w,f='']=s.trim().split('.');return BigInt(w||0)*10n**18n+BigInt((f+'0'.repeat(18)).slice(0,18))};
+$('conn').onclick=async()=>{
+  if(!eth)return say('<span class="err">No wallet found — install MetaMask or Rabby</span>');
+  try{
+    [me]=await eth.request({method:'eth_requestAccounts'});
+    try{await eth.request({method:'wallet_switchEthereumChain',params:[{chainId:'0xaa36a7'}]})}catch{}
+    $('me').textContent=me.slice(0,6)+'…'+me.slice(-4);
+    ['bClaim','bCS','bSend'].forEach(b=>$(b).disabled=false);
+    $('addr').value=me;$('f').requestSubmit();
+  }catch(e){say('<span class="err">'+esc(e.message)+'</span>')}
+};
+async function send(to,data,label){
+  if(!ids)await events();
+  try{
+    say('simulating '+esc(label)+'…');
+    const r=await fetch(RPC,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_call',params:[{from:me,to,data},'latest']})}).then(r=>r.json());
+    if(r.error)return say('<span class="err">'+esc(label)+' would revert: '+esc(r.error.message)+'</span>');
+    const h=await eth.request({method:'eth_sendTransaction',params:[{from:me,to,data}]});
+    say(`${esc(label)} sent · <a href="${SCAN}/tx/${esc(h)}" target="_blank">${h.slice(0,10)}… ↗</a>`);
+  }catch(e){say('<span class="err">'+esc(e.message)+'</span>')}
+}
+$('bClaim').onclick=()=>send(ids.staking.proxy,'0x1e83409a'+pad(me),'claim');
+$('bCS').onclick=()=>send(ids.staking.proxy,'0xcb1a4fc0','claim & stake');
+$('sf').onsubmit=ev=>{
+  ev.preventDefault();
+  const t=$('to').value.trim();
+  if(!/^0x[0-9a-fA-F]{40}$/.test(t)||!/^\d+(\.\d+)?$/.test($('amt').value.trim()))return say('<span class="err">Enter a valid address and amount</span>');
+  send(ids.token,'0xa9059cbb'+pad(t)+wei($('amt').value).toString(16).padStart(64,'0'),'send SQK');
 };
 status();events();setInterval(status,15000);setInterval(events,60000);
 if(location.hash.length===43){$('addr').value=location.hash.slice(1);setTimeout(()=>$('f').requestSubmit(),800)}

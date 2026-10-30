@@ -9,3 +9,6 @@ Live explorer for [Squeekchain](https://squeekchain.com) on Sepolia: hamster sta
 - Contract addresses come from the API's live identities, so it follows testnet reinstalls automatically.
 
 Built by [@Canadian__Hodl](https://x.com/Canadian__Hodl) for the Squeekchain community.
+
+## Act
+Connect a wallet (MetaMask/Rabby) on Sepolia to claim staking rewards, claim \& stake, or send SQK. Every tx is simulated with eth_call before your wallet is asked to sign.
