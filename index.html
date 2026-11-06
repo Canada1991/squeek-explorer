@@ -198,7 +198,7 @@ async function lookup(a){
       <div class="card"><div class="k">SQK balance</div><div class="v">${units(sqk)}</div><div class="s"><a href="${SCAN}/address/${a}" target="_blank">${short(a)} ↗</a></div></div>
       <div class="card"><div class="k">SQK staked</div><div class="v">${so?units(word(so)):'–'}</div><div class="s">in the staking contract</div></div>
       <div class="card"><div class="k">Claimable</div><div class="v">${cl?units(cl):'–'}</div><div class="s">SQK rewards ready to claim</div></div>
-      <div class="card"><div class="k">Staking power</div><div class="v">${pw?units(word(pw)):'–'}</div><div class="s">${fmt(word(nft))} Squeeks in wallet</div></div>`;
+      <div class="card"><div class="k">Staking power</div><div class="v">${pw?units(word(pw)+word(pw,1)):'–'}</div><div class="s">${pw?units(word(pw))+' from Squeeks · '+units(word(pw,1))+' from SQK':''} · ${fmt(word(nft))} Squeeks in wallet</div></div>`;
     const [h,s]=await Promise.all([heldIds(a),stakedIds(a)]);
     const L=await levels([...h,...s]);
     chips($('held'),h,L);chips($('staked'),s,L);buttons();
