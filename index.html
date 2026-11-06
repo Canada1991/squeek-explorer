@@ -206,7 +206,8 @@ async function events(){
       let d='';
       if(p.amountBaseUnits!==undefined)d=units(p.amountBaseUnits)+' SQK';
       else if(p.workAdded!==undefined)d='round '+p.settledThroughRound+' · +'+p.workAdded+' work';
-      else if(p.tokenId!==undefined)d='Squeek #'+p.tokenId;
+      else if(p.survivorTokenId!==undefined)d=`#${p.donorTokenId} → #${p.survivorTokenId} · now L${p.level}`+(p.custody==='staking'?' (staked)':'');
+      else if(p.tokenId!==undefined)d='Squeek #'+p.tokenId+(p.basePower?' · '+fmt(p.basePower)+' power':'');
       else if(Array.isArray(p.tokenIds))d='Squeeks #'+p.tokenIds.join(', #');
       const who=p.account||p.owner||p.depositor||p.recipient;
       if(who)d+=' · '+short(who);
