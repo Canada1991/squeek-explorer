@@ -92,6 +92,17 @@ footer{margin-top:40px;color:var(--mut);font-size:12px}
   <div class="s" id="tx" style="margin-top:10px">Every action is simulated first; your wallet signs, nothing is stored here.</div>
 </div>
 
+<h2>Alerts</h2>
+<div class="card">
+  <div class="s">Get a browser notification while this tab is open (it can sit in the background). Nothing leaves your browser.</div>
+  <div style="display:grid;gap:8px;margin-top:10px">
+    <label class="row"><input type="checkbox" id="alHam" style="flex:0"> The hamster starts running</label>
+    <label class="row"><input type="checkbox" id="alClaim" style="flex:0"> Claimable rewards reach <input id="alClaimAmt" value="100" style="max-width:100px;flex:0 0 100px"> SQK</label>
+    <label class="row"><input type="checkbox" id="alMerge" style="flex:0"> A new merge becomes ready</label>
+  </div>
+  <div class="s" id="alS" style="margin-top:8px"></div>
+</div>
+
 <h2>Merge planner</h2>
 <div class="card">
   <div class="s">Same-level Squeeks past their cooldown can merge: the survivor goes up a level and the donor burns. Every merge adds staking power. Staked Squeeks merge in place, no unstaking. Look up a wallet above to plan.</div>
@@ -174,6 +185,7 @@ async function status(){
   try{
     const s=await j('/v1/status'), m=s.measurement, a=s.builder.anchor;
     const live=m.freshness==='online'&&m.rpmMilli>0;
+    checkAlerts(live);
     $('ham').innerHTML=`<span class="dot ${live?'on':''}"></span>${live?'RUNNING':esc(m.coreStatus||'IDLE')}`;
     $('hamS').textContent=`${(m.rpmMilli/1000).toFixed(1)} rpm · ${(m.speedMmPerSecond/10).toFixed(1)} cm/s · seen ${ago(m.observedAt)}`;
     $('h').textContent=fmt(a.blockHeight);height=BigInt(a.blockHeight);
@@ -291,6 +303,64 @@ async function estimate(pw,so,cl,mergeGain){
   }catch{$('est').style.display='none'}
 }
 
+// Merge all: run every ready merge in order, stop on the first failure or cancel.
+const mergeTx=p=>p.where==='staked'?[C.staking,SEL.mergeDeposited+pad(C.collection)+pad(p.survivor)+pad(p.donor)]:[C.collection,SEL.merge+pad(p.survivor)+pad(p.donor)];
+async function mergeAll(ready){
+  const list=ready.map(p=>`#${p.donor} → #${p.survivor} (L${p.l}→L${p.l+1}${p.where==='staked'?', staked':''})`).join('\n');
+  if(!confirm(`Run ${ready.length} merges? Each donor Squeek is burned into its survivor:\n\n${list}\n\nYour wallet will ask you to sign each one. You can stop any time by rejecting.`))return;
+  document.querySelectorAll('#plan button').forEach(b=>b.disabled=true);
+  let done=0;
+  for(const p of ready){
+    const [to,data]=mergeTx(p);
+    const ok=await send(to,data,`merge ${done+1}/${ready.length}: #${p.donor} into #${p.survivor}`,()=>{});
+    if(!ok){say($('tx').innerHTML+` <span class="s">· stopped after ${done} of ${ready.length} merges</span>`);break}
+    done++;
+  }
+  if(done===ready.length)say(`<span class="okc">All ${done} merges confirmed.</span>`);
+  lookup(me);
+}
+
+// Alerts: checked while the tab is open; prefs stay in this browser.
+let PLAN=null, lastLive=null, lastReady=null, claimFired=false;
+const AL=['alHam','alClaim','alMerge','alClaimAmt'];
+function loadAlerts(){try{const p=JSON.parse(localStorage.getItem('sqx.alerts')||'{}');AL.forEach(k=>{if(k in p){if($(k).type==='checkbox')$(k).checked=p[k];else $(k).value=p[k]}})}catch{}}
+function saveAlerts(){try{const p={};AL.forEach(k=>p[k]=$(k).type==='checkbox'?$(k).checked:$(k).value);localStorage.setItem('sqx.alerts',JSON.stringify(p))}catch{}}
+async function alertsChanged(e){
+  saveAlerts();
+  if(e?.target?.checked&&'Notification' in window&&Notification.permission==='default')await Notification.requestPermission();
+  alertStatus();checkAlerts();
+}
+function alertStatus(){
+  const on=['alHam','alClaim','alMerge'].some(k=>$(k).checked);
+  const perm='Notification' in window?Notification.permission:'unsupported';
+  $('alS').innerHTML=!on?'':perm==='granted'?'<span class="okc">On.</span> Keep this tab open.'
+    :perm==='denied'?'<span class="err">Notifications are blocked for this site.</span> Allow them in the browser\'s site settings; alerts will still show on this page.'
+    :perm==='unsupported'?'This browser has no notifications; alerts will show on this page.':'Allow notifications when your browser asks.';
+}
+function notify(title,body){
+  $('alS').innerHTML=`<span class="okc">🔔 ${esc(title)}</span> ${esc(body)} · ${new Date().toLocaleTimeString()}`;
+  try{if('Notification' in window&&Notification.permission==='granted'){const n=new Notification(title,{body,tag:title});n.onclick=()=>{window.focus();n.close()}}}catch{}
+}
+function readyPairs(all){
+  if(!all||height==null)return 0;let n=0;
+  for(const where of ['wallet','staked'])for(let l=1;l<MAX_LEVEL;l++)n+=Math.floor(all.filter(x=>x.where===where&&x.level===l&&x.next<=height).length/2);
+  return n}
+async function checkAlerts(live){
+  if(live!==undefined){if($('alHam').checked&&lastLive===false&&live)notify('🐹 The hamster is running','Squeektoshi is on the wheel: mining and rewards are flowing.');lastLive=live}
+  const who=me||view;
+  if($('alClaim').checked&&who&&C){
+    try{const c=word(await call(C.staking,SEL.claimable+pad(who))),t=wei($('alClaimAmt').value||'0');
+      if(c>=t&&t>0n&&!claimFired){notify('💰 Rewards ready to claim',`${units(c)} SQK claimable for ${short(who)}.`);claimFired=true}
+      if(c<t)claimFired=false}catch{}
+  }
+  if(PLAN&&who&&PLAN.owner?.toLowerCase()===who.toLowerCase()){
+    const n=readyPairs(PLAN.all);
+    if($('alMerge').checked&&lastReady!==null&&n>lastReady)notify('✨ Merge ready',`${n} merge${n>1?'s':''} ready for ${short(who)}. Open Squeek Explorer to merge.`);
+    lastReady=n}
+}
+AL.forEach(k=>$(k).addEventListener('change',alertsChanged));
+loadAlerts();alertStatus();
+
 // Merge planner: pair same-level Squeeks in the same place (wallet or staking) once both cooldowns have passed.
 const powerCache={};
 async function basePower(l){if(!(l in powerCache))powerCache[l]=word(await call(C.staking,SEL.basePower+pad(C.collection)+pad(l)));return powerCache[l]}
@@ -336,8 +406,11 @@ async function plan(h,s,L){
         <div class="card"><div class="k">Full ladder</div><div class="v">${fmt(best)}</div><div class="s">${merges} merges → highest L${top}, +${fmt(best-now)} power</div></div>
       </div>
       <table style="margin-top:10px">${rows.join('')}</table>
+      ${ready.length>1?`<div class="row" style="margin-top:10px"><button id="mergeAll" ${mine()&&open?'':'disabled'}>Merge all ${ready.length} ready pairs</button><span class="s">+${fmt(ready.reduce((t,p)=>t+p.gain,0n))} power · one wallet signature per merge</span></div>`:''}
       <div class="chips" id="readyPairs" style="margin-top:10px">${ready.map((p,i)=>`<button class="${i?'ghost':''}" data-i="${i}" ${mine()&&open?'':'disabled'}>Merge #${esc(p.donor)} → #${esc(p.survivor)} (L${p.l}→L${p.l+1}${p.where==='staked'?', staked':''}) +${fmt(p.gain)}</button>`).join('')}</div>
       ${ready.length&&!mine()?'<div class="s" style="margin-top:6px">Connect this wallet to merge.</div>':''}`;
+    PLAN={all,owner:view};
+    if($('mergeAll'))$('mergeAll').onclick=()=>mergeAll(ready);
     el.querySelectorAll('#readyPairs button').forEach(b=>b.onclick=()=>{const p=ready[b.dataset.i];
       if(!confirm(`Merge Squeek #${p.donor} into #${p.survivor}? #${p.donor} is burned.`))return;
       if(p.where==='staked')send(C.staking,SEL.mergeDeposited+pad(C.collection)+pad(p.survivor)+pad(p.donor),`merge staked #${p.donor} into #${p.survivor}`);
@@ -389,7 +462,8 @@ async function send(to,data,label,then){
     const ok=await waitTx(h);
     say(`${esc(label)} ${ok?'<span class="okc">confirmed</span>':'<span class="err">failed</span>'} · <a href="${SCAN}/tx/${esc(h)}" target="_blank">${h.slice(0,10)}… ↗</a>`);
     if(ok){if(then)await then();else lookup(me)}
-  }catch(e){say('<span class="err">'+esc(explain(e))+'</span>')}
+    return ok;
+  }catch(e){say('<span class="err">'+esc(explain(e))+'</span>');return false}
 }
 async function nftApproved(){return word(await call(C.collection,SEL.isApprovedForAll+pad(me)+pad(C.staking)))===1n}
 $('bClaim').onclick=()=>send(C.staking,SEL.claim+pad(me),'claim');
@@ -409,7 +483,7 @@ $('sf').onsubmit=ev=>{ev.preventDefault();const t=$('to').value.trim(),v=$('amt'
   if(!/^0x[0-9a-fA-F]{40}$/.test(t)||!/^\d+(\.\d+)?$/.test(v))return say('<span class="err">Enter a valid address and amount</span>');
   send(C.token,SEL.transfer+pad(t)+pad(wei(v)),'send '+v+' SQK')};
 
-status();events();setInterval(status,15000);setInterval(events,60000);
+status();events();setInterval(status,15000);setInterval(events,60000);setInterval(()=>checkAlerts(),60000);
 (async()=>{
   let remembered=false;try{remembered=localStorage.getItem('sqx.connected')==='1'}catch{}
   if(eth&&remembered){try{const [a]=await eth.request({method:'eth_accounts'});if(a)return useAccount(a)}catch{}}

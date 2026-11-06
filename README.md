@@ -25,10 +25,16 @@ squeekchain-project: 76968b96-8afb-4b36-a60d-786110553b6e
 - Pairs your same-level Squeeks that are past their merge cooldown, in your wallet or in staking (staked pairs merge in place through `mergeDeposited`, no unstaking)
 - Shows the power each merge adds, how many blocks until the next Squeek comes off cooldown, and when a wallet/staked split is blocking a pair
 - "Full ladder": how far your Squeeks can climb if you keep merging, the highest level you'd reach and the total power gained
+- **Merge all**: run every ready merge in one go (one confirmation for the plan, your wallet signs each, stops on the first failure or cancel)
 - One-click merge for every ready pair; rules (same level, below L10, cooldown vs. Squeekchain height, merges open) come from the contracts' verified source
 - Look up any address read-only
 
 Every transaction is simulated with `eth_call` first: if it would revert you see why, and your wallet is never asked to sign it. Keys never touch the site.
+
+**Alerts** (browser notifications while the tab is open, nothing leaves your browser)
+- The hamster starts running
+- Claimable rewards reach an amount you choose
+- A new merge becomes ready (a Squeek came off cooldown)
 
 ## Follows reinstalls on its own
 
