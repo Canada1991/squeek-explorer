@@ -74,6 +74,12 @@ footer{margin-top:40px;color:var(--mut);font-size:12px}
   <div class="s" id="tx" style="margin-top:10px">Every action is simulated first; your wallet signs, nothing is stored here.</div>
 </div>
 
+<h2>Merge planner</h2>
+<div class="card">
+  <div class="s">Same-level Squeeks past their cooldown can merge: the survivor goes up a level and the donor burns. Every merge adds staking power. Staked Squeeks merge in place, no unstaking. Look up a wallet above to plan.</div>
+  <div id="plan" style="margin-top:10px"><span class="s">–</span></div>
+</div>
+
 <h2>Latest on-chain activity</h2>
 <div class="card"><table id="ev"><tr><td>loading…</td></tr></table></div>
 
@@ -98,7 +104,9 @@ const arr=ids=>pad(ids.length)+ids.map(pad).join('');
 const SEL={totalSupply:'0x18160ddd',balanceOf:'0x70a08231',claimable:'0x402914f5',stakeOf:'0x42623360',accountPower:'0x9624178f',
   depositor:'0x5e020ebb',deposit:'0xa71604e8',withdraw:'0x8293744b',stake:'0xa694fc3a',level:'0x05c58df2',merge:'0xd1c2babb',
   mergesOpen:'0x219067a0',isApprovedForAll:'0xe985e9c5',setApprovalForAll:'0xa22cb465',allowance:'0xdd62ed3e',approve:'0x095ea7b3',
-  totalStaked:'0x817b1cd2',totalBurned:'0xd89135cd',claim:'0x1e83409a',claimAndStake:'0xcb1a4fc0',transfer:'0xa9059cbb'};
+  totalStaked:'0x817b1cd2',totalBurned:'0xd89135cd',claim:'0x1e83409a',claimAndStake:'0xcb1a4fc0',transfer:'0xa9059cbb',
+  basePower:'0x6d30c2e2',nextMergeHeight:'0x0bd1733a',mergeDeposited:'0x9a96734e'};
+const MAX_LEVEL=10;
 
 async function j(u){const r=await fetch(u.startsWith('http')?u:API+u);if(!r.ok)throw new Error(u+' '+r.status);return r.json()}
 async function rpc(method,params){const r=await fetch(RPC,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});const x=await r.json();if(x.error)throw new Error(x.error.message);return x.result}
@@ -194,7 +202,60 @@ async function lookup(a){
     const [h,s]=await Promise.all([heldIds(a),stakedIds(a)]);
     const L=await levels([...h,...s]);
     chips($('held'),h,L);chips($('staked'),s,L);buttons();
+    plan(h,s,L);
   }catch(e){$('wal').innerHTML='<div class="card err">'+esc(e.message)+'</div>'}
+}
+
+// Merge planner: pair same-level Squeeks in the same place (wallet or staking) once both cooldowns have passed.
+const powerCache={};
+async function basePower(l){if(!(l in powerCache))powerCache[l]=word(await call(C.staking,SEL.basePower+pad(C.collection)+pad(l)));return powerCache[l]}
+async function plan(h,s,L){
+  const el=$('plan');
+  if(!h.length&&!s.length){el.innerHTML='<span class="s">No Squeeks in this wallet.</span>';return}
+  el.innerHTML='<span class="s">planning…</span>';
+  try{
+    const height=BigInt((await j('/v1/status')).builder.anchor.blockHeight);
+    const open=word(await call(C.collection,SEL.mergesOpen))===1n;
+    const all=[...h.map(id=>({id,where:'wallet'})),...s.map(id=>({id,where:'staked'}))].filter(x=>typeof L[x.id]==='number');
+    await Promise.all(all.map(async x=>{x.level=L[x.id];x.next=word(await call(C.collection,SEL.nextMergeHeight+pad(x.id)))}));
+    const levels=[...new Set(all.map(x=>x.level))].sort((a,b)=>a-b);
+    for(const l of new Set([...levels,...levels.map(l=>l+1)]))if(l<=MAX_LEVEL)await basePower(l);
+    const ready=[], rows=[];
+    for(const l of levels){
+      const at=all.filter(x=>x.level===l), gain=l<MAX_LEVEL?powerCache[l+1]-2n*powerCache[l]:0n;
+      for(const where of ['wallet','staked']){
+        const g=at.filter(x=>x.where===where), r=g.filter(x=>x.next<=height).sort((a,b)=>Number(a.id)-Number(b.id));
+        if(!g.length)continue;
+        const pairs=l<MAX_LEVEL?Math.floor(r.length/2):0;
+        for(let i=0;i<pairs;i++)ready.push({l,where,survivor:r[2*i].id,donor:r[2*i+1].id,gain});
+        const waiting=g.filter(x=>x.next>height).sort((a,b)=>(a.next>b.next)-(a.next<b.next));
+        const wait=waiting.length?` · next ready: #${waiting[0].id} in ${fmt(waiting[0].next-height)} blocks`:'';
+        rows.push(`<tr><td>L${l} ${where}</td><td>${g.length} Squeek${g.length>1?'s':''} · ${r.length} ready${wait}</td><td>${l>=MAX_LEVEL?'max level':pairs?pairs+' merge'+(pairs>1?'s':'')+' now, +'+fmt(gain*BigInt(pairs))+' power':'—'}</td></tr>`);
+      }
+      const w=at.filter(x=>x.where==='wallet').length, st=at.filter(x=>x.where==='staked').length;
+      if(l<MAX_LEVEL&&w%2===1&&st%2===1)rows.push(`<tr><td></td><td colspan="2" class="s">One L${l} in the wallet and one staked: stake the wallet one to pair them.</td></tr>`);
+    }
+    // Ladder: merging everything as far as it goes, ignoring cooldowns.
+    const cnt={};all.forEach(x=>cnt[x.level]=(cnt[x.level]||0)+1);
+    let now=0n,best=0n,merges=0;
+    for(const x of all)now+=powerCache[x.level];
+    for(let l=1;l<=MAX_LEVEL;l++){const c=cnt[l]||0;if(!c)continue;
+      if(l<MAX_LEVEL){const m=Math.floor(c/2);merges+=m;cnt[l+1]=(cnt[l+1]||0)+m;if(!(l+1 in powerCache))await basePower(l+1);best+=BigInt(c%2)*powerCache[l]}else best+=BigInt(c)*powerCache[l]}
+    const top=Math.max(...Object.keys(cnt).filter(k=>cnt[k]).map(Number));
+    el.innerHTML=`
+      <div class="grid">
+        <div class="card"><div class="k">Ready now</div><div class="v">${ready.length}</div><div class="s">${open?'merge pairs':'<span class="err">merges closed</span>'} · chain height ${fmt(height)}</div></div>
+        <div class="card"><div class="k">Power now</div><div class="v">${fmt(now)}</div><div class="s">base power of these Squeeks</div></div>
+        <div class="card"><div class="k">Full ladder</div><div class="v">${fmt(best)}</div><div class="s">${merges} merges → highest L${top}, +${fmt(best-now)} power</div></div>
+      </div>
+      <table style="margin-top:10px">${rows.join('')}</table>
+      <div class="chips" id="readyPairs" style="margin-top:10px">${ready.map((p,i)=>`<button class="${i?'ghost':''}" data-i="${i}" ${mine()&&open?'':'disabled'}>Merge #${esc(p.donor)} → #${esc(p.survivor)} (L${p.l}→L${p.l+1}${p.where==='staked'?', staked':''}) +${fmt(p.gain)}</button>`).join('')}</div>
+      ${ready.length&&!mine()?'<div class="s" style="margin-top:6px">Connect this wallet to merge.</div>':''}`;
+    el.querySelectorAll('#readyPairs button').forEach(b=>b.onclick=()=>{const p=ready[b.dataset.i];
+      if(!confirm(`Merge Squeek #${p.donor} into #${p.survivor}? #${p.donor} is burned.`))return;
+      if(p.where==='staked')send(C.staking,SEL.mergeDeposited+pad(C.collection)+pad(p.survivor)+pad(p.donor),`merge staked #${p.donor} into #${p.survivor}`);
+      else send(C.collection,SEL.merge+pad(p.survivor)+pad(p.donor),`merge #${p.donor} into #${p.survivor}`)});
+  }catch(e){el.innerHTML='<span class="err">planner: '+esc(e.message)+'</span>'}
 }
 $('f').onsubmit=ev=>{ev.preventDefault();const a=$('addr').value.trim();
   if(!/^0x[0-9a-fA-F]{40}$/.test(a)){$('wal').innerHTML='<div class="card err">Enter a valid 0x address</div>';return}lookup(a)};
