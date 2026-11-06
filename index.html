@@ -37,6 +37,20 @@ a{color:var(--blue);text-decoration:none}
 .chip{border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;user-select:none}
 .chip.sel{border-color:var(--gold);color:var(--gold)}
 .split{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px}
+.sq{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin-top:8px}
+.sqk{position:relative;border:2px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;background:var(--bg);aspect-ratio:1}
+.sqk.sel{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold)}
+.sqk img{width:100%;height:100%;display:block;image-rendering:auto}
+.sqk .ph{position:absolute;inset:0;display:grid;place-items:center;color:var(--mut);font-size:11px}
+.sqk .tag{position:absolute;left:4px;bottom:4px;right:4px;display:flex;justify-content:space-between;font-size:11px;font-weight:700}
+.sqk .tag span{background:rgba(0,0,0,.65);color:#fff;border-radius:4px;padding:1px 5px}
+.sqk .tag .lv{background:var(--gold);color:#111}
+.sqk .cd{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.65);color:#fff;border-radius:4px;padding:1px 5px;font-size:10px}
+.banner{display:none;background:var(--bad);color:#fff;border-radius:10px;padding:10px 14px;margin:0 0 16px;align-items:center;gap:10px;flex-wrap:wrap}
+.banner button{background:#fff;color:#111}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.est{margin-top:12px}
 footer{margin-top:40px;color:var(--mut);font-size:12px}
 </style>
 </head>
@@ -44,6 +58,8 @@ footer{margin-top:40px;color:var(--mut);font-size:12px}
 <main>
 <h1>🐹 Squeek <span>Explorer</span></h1>
 <p class="sub">Live view of Squeekchain on Sepolia plus a dashboard for your Squeeks: stake, unstake, merge, claim and stake SQK. Contracts are discovered from the live deployment, so it follows reinstalls on its own.</p>
+
+<div class="banner" id="net">⚠️ Your wallet is on the wrong network. Squeekchain runs on Sepolia. <button id="netFix">Switch to Sepolia</button></div>
 
 <div class="grid">
   <div class="card"><div class="k">Hamster</div><div class="v" id="ham"><span class="dot"></span>…</div><div class="s" id="hamS"></div></div>
@@ -59,11 +75,12 @@ footer{margin-top:40px;color:var(--mut);font-size:12px}
   <div class="row"><button id="conn">Connect wallet</button><span class="s" id="me">or look up any address below</span></div>
   <form id="f" style="margin-top:10px"><input id="addr" placeholder="0x… wallet address" autocomplete="off" spellcheck="false"><button class="ghost">Look up</button></form>
   <div class="grid" id="wal" style="margin-top:12px"></div>
+  <div class="card est" id="est" style="display:none"></div>
   <div class="split">
-    <div class="card"><div class="k">In wallet</div><div class="chips" id="held"><span class="s">–</span></div>
+    <div class="card"><div class="k">In wallet · tap to select</div><div class="sq" id="held"><span class="s">–</span></div>
       <div class="row" style="margin-top:10px"><button id="bDep" disabled>Stake selected</button><button id="bMerge" class="ghost" disabled>Merge 2 selected</button></div>
       <div class="s" id="mergeS" style="margin-top:6px">Merge: first selected survives, second is burned into it.</div></div>
-    <div class="card"><div class="k">Staked</div><div class="chips" id="staked"><span class="s">–</span></div>
+    <div class="card"><div class="k">Staked · tap to select</div><div class="sq" id="staked"><span class="s">–</span></div>
       <div class="row" style="margin-top:10px"><button id="bWd" disabled>Unstake selected</button></div></div>
   </div>
   <div class="row" style="margin-top:12px">
@@ -106,10 +123,34 @@ const SEL={totalSupply:'0x18160ddd',balanceOf:'0x70a08231',claimable:'0x402914f5
   mergesOpen:'0x219067a0',isApprovedForAll:'0xe985e9c5',setApprovalForAll:'0xa22cb465',allowance:'0xdd62ed3e',approve:'0x095ea7b3',
   totalStaked:'0x817b1cd2',totalBurned:'0xd89135cd',claim:'0x1e83409a',claimAndStake:'0xcb1a4fc0',transfer:'0xa9059cbb',
   basePower:'0x6d30c2e2',nextMergeHeight:'0x0bd1733a',mergeDeposited:'0x9a96734e'};
-const MAX_LEVEL=10;
+const MAX_LEVEL=10, SEPOLIA='0xaa36a7';
+let height=null;
+const SPIN='<span class="spin"></span>';
+const ERR={
+  '0x8605db4c':d=>{const id=word(d,0),h=word(d,1);return `Squeek #${id} is still on merge cooldown until Squeekchain block ${fmt(h)}`+(height!=null&&h>height?` (${fmt(h-height)} blocks to go).`:'.')},
+  '0xc3464730':d=>`Both Squeeks must be the same level to merge (these are L${word(d,0)} and L${word(d,1)}).`,
+  '0x942d2be8':d=>`Squeek #${word(d,1)} isn't in your wallet.`,
+  '0x19a5efe7':()=>`Pick two different Squeeks to merge.`,
+  '0x9fd30294':()=>`Merges are closed right now.`,
+  '0x2624bbde':d=>`Squeek #${word(d,0)} is already max level (L10).`,
+  '0xe450d38c':d=>`Not enough SQK: you have ${units(word(d,1))}, this needs ${units(word(d,2))}.`,
+  '0xfb8f41b2':()=>`The staking contract isn't approved to use that much SQK yet.`,
+  '0xd93c0665':()=>`Staking is paused right now.`,'0x9e87fac8':()=>`Staking is paused right now.`,
+  '0x82b42900':()=>`Only the wallet that staked these Squeeks can do that.`,
+  '0x9d749a92':()=>`That stake amount isn't allowed.`,
+  '0x177e802f':d=>`Staking isn't approved to move Squeek #${word(d,1)} yet.`,
+  '0x64283d7b':d=>`Squeek #${word(d,1)} isn't owned by this wallet.`,
+  '0x7e273289':d=>`Squeek #${word(d,0)} doesn't exist (maybe it was merged away).`,
+  '0xa8834357':()=>`That amount is outside what staking accepts.`};
+function explain(e){
+  if(e&&(e.code===4001||/user (rejected|denied)/i.test(e.message||'')))return 'You cancelled it in your wallet.';
+  const d=typeof e?.data==='string'?e.data:(e?.data?.data||'');
+  if(d&&d.length>=10&&ERR[d.slice(0,10)])return ERR[d.slice(0,10)]('0x'+d.slice(10));
+  if(/insufficient funds/i.test(e?.message||''))return 'Not enough Sepolia ETH in this wallet for gas.';
+  return (e?.message||String(e)).replace(/^execution reverted:?\s*/i,'Transaction would fail: ')}
 
 async function j(u){const r=await fetch(u.startsWith('http')?u:API+u);if(!r.ok)throw new Error(u+' '+r.status);return r.json()}
-async function rpc(method,params){const r=await fetch(RPC,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});const x=await r.json();if(x.error)throw new Error(x.error.message);return x.result}
+async function rpc(method,params){const r=await fetch(RPC,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});const x=await r.json();if(x.error){const er=new Error(x.error.message);er.data=x.error.data;throw er}return x.result}
 const call=(to,data,from)=>rpc('eth_call',[from?{from,to,data}:{to,data},'latest']);
 const word=(hex,i=0)=>BigInt('0x'+(hex.slice(2+64*i,66+64*i)||'0'));
 
@@ -134,7 +175,7 @@ async function status(){
     const live=m.freshness==='online'&&m.rpmMilli>0;
     $('ham').innerHTML=`<span class="dot ${live?'on':''}"></span>${live?'RUNNING':esc(m.coreStatus||'IDLE')}`;
     $('hamS').textContent=`${(m.rpmMilli/1000).toFixed(1)} rpm · ${(m.speedMmPerSecond/10).toFixed(1)} cm/s · seen ${ago(m.observedAt)}`;
-    $('h').textContent=fmt(a.blockHeight);
+    $('h').textContent=fmt(a.blockHeight);height=BigInt(a.blockHeight);
     const p=Number(a.blockProgress)/1e7;$('hp').style.width=p+'%';$('hpS').textContent=p.toFixed(1)+'% to next block · difficulty '+fmt(a.workPerThousandBlocks);
     $('w').textContent=fmt(a.cumulativeWork);$('wS').textContent='work units (wheel turns measured)';
     $('r').textContent=fmt(a.settledThroughRound);$('rS').innerHTML=`<a href="${SCAN}/tx/${esc(a.transactionHash)}" target="_blank">settled ${ago(a.confirmedAt)}</a>`;
@@ -183,13 +224,29 @@ async function stakedIds(a){
   await Promise.all([...cand].map(async id=>{try{const d=await call(C.staking,SEL.depositor+pad(C.collection)+pad(id));if(word(d)===BigInt(a))out.push(id)}catch{}}));
   return out.sort((x,y)=>x-y)}
 async function levels(ids){const L={};await Promise.all(ids.map(async id=>{try{L[id]=Number(word(await call(C.collection,SEL.level+pad(id))))}catch{L[id]='?'}}));return L}
-function chips(el,ids,L){el.innerHTML=ids.length?ids.map(id=>`<span class="chip" data-id="${esc(id)}">#${esc(id)} · L${esc(L[id])}</span>`).join(''):'<span class="s">none</span>';
-  el.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{c.classList.toggle('sel');buttons()})}
-const selected=el=>[...$(el).querySelectorAll('.chip.sel')].map(c=>c.dataset.id);
+// Squeek art: the collection renders each Squeek fully on-chain; tokenURI returns JSON with an SVG image.
+const ART=new Map(), artQueue=[];let artBusy=0;
+function abiString(hex){const b=hex.slice(2),off=Number(BigInt('0x'+b.slice(0,64)))*2,len=Number(BigInt('0x'+b.slice(off,off+64)))*2;
+  const h=b.slice(off+64,off+64+len),u=new Uint8Array(h.length/2);for(let i=0;i<u.length;i++)u[i]=parseInt(h.substr(i*2,2),16);return new TextDecoder().decode(u)}
+async function art(id){
+  if(!ART.has(id))ART.set(id,(async()=>{const uri=abiString(await call(C.collection,'0xc87b56dd'+pad(id)));
+    const js=uri.startsWith('data:application/json;base64,')?atob(uri.split(',')[1]):decodeURIComponent(uri.split(',')[1]);
+    const m=JSON.parse(js);return {image:m.image,traits:(m.attributes||[]).map(t=>t.trait_type+': '+t.value).join('\n')}})().catch(e=>{ART.delete(id);throw e}));
+  return ART.get(id)}
+function pumpArt(){while(artBusy<3&&artQueue.length){const [id,box]=artQueue.shift();artBusy++;
+  art(id).then(a=>{if(!box.isConnected)return;const img=new Image();img.alt='Squeek #'+id;img.src=a.image;img.onload=()=>box.querySelector('.ph')?.remove();box.prepend(img);box.title='Squeek #'+id+'\n'+a.traits})
+    .catch(()=>{const ph=box.querySelector('.ph');if(ph)ph.textContent='no art'}).finally(()=>{artBusy--;pumpArt()})}}
+const artObs='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){artObs.unobserve(e.target);artQueue.push([e.target.dataset.id,e.target]);pumpArt()}}),{rootMargin:'200px'}):null;
+function chips(el,ids,L){
+  el.innerHTML=ids.length?ids.map(id=>`<div class="sqk" data-id="${esc(id)}"><div class="ph">${SPIN}</div><div class="tag"><span>#${esc(id)}</span><span class="lv">L${esc(L[id])}</span></div></div>`).join('')
+    :`<span class="s">${el.id==='held'?'No Squeeks here. Squeeks come from the Genesis mint on squeekchain.com, or from another holder.':'Nothing staked. Select Squeeks in your wallet and press Stake selected to start earning.'}</span>`;
+  el.querySelectorAll('.sqk').forEach(c=>{c.onclick=()=>{c.classList.toggle('sel');buttons()};
+    if(artObs)artObs.observe(c);else{artQueue.push([c.dataset.id,c]);pumpArt()}})}
+const selected=el=>[...$(el).querySelectorAll('.sqk.sel')].map(c=>c.dataset.id);
 
 async function lookup(a){
   view=a;if(!C)await events();
-  $('wal').innerHTML='<div class="card">reading chain…</div>';
+  $('wal').innerHTML='<div class="card">'+SPIN+'reading chain…</div>';$('held').innerHTML=$('staked').innerHTML='<span class="s">'+SPIN+'loading Squeeks…</span>';$('est').style.display='none';
   history.replaceState(null,'','#'+a);
   try{
     const [sqk,nft,cl,so,pw]=await Promise.all([call(C.token,SEL.balanceOf+pad(a)),call(C.collection,SEL.balanceOf+pad(a)),
@@ -199,11 +256,37 @@ async function lookup(a){
       <div class="card"><div class="k">SQK staked</div><div class="v">${so?units(word(so)):'–'}</div><div class="s">in the staking contract</div></div>
       <div class="card"><div class="k">Claimable</div><div class="v">${cl?units(cl):'–'}</div><div class="s">SQK rewards ready to claim</div></div>
       <div class="card"><div class="k">Staking power</div><div class="v">${pw?units(word(pw)+word(pw,1)):'–'}</div><div class="s">${pw?units(word(pw))+' from Squeeks · '+units(word(pw,1))+' from SQK':''} · ${fmt(word(nft))} Squeeks in wallet</div></div>`;
+    estimate(pw,so,cl);
     const [h,s]=await Promise.all([heldIds(a),stakedIds(a)]);
     const L=await levels([...h,...s]);
     chips($('held'),h,L);chips($('staked'),s,L);buttons();
     plan(h,s,L);
   }catch(e){$('wal').innerHTML='<div class="card err">'+esc(e.message)+'</div>'}
+}
+
+// Rewards estimate: your share of total staking power times the live reward stream.
+let EST=null;
+async function estimate(pw,so,cl,mergeGain){
+  if(pw)EST={pw,so,cl};else if(!EST)return;
+  ({pw,so,cl}=EST);
+  try{
+    const r=await call(C.staking,'0x582c7928'),funded=word(r,0),paid=word(r,1),total=word(r,5)+word(r,6),rate=word(r,7),ends=Number(word(r,9));
+    const mine=word(pw)+word(pw,1),W=10n**18n;
+    const share=x=>total?Number(x*10n**8n/total)/1e6:0;
+    const perDay=x=>total?rate*86400n*x/total:0n;
+    const gainW=(mergeGain||0n)*W;
+    const rows=[];
+    if(rate>0n){
+      rows.push(`<div class="v">≈ ${units(perDay(mine))} SQK / day</div><div class="s">your ${share(mine).toFixed(4)}% of all staking power × the live reward stream (${units(rate*86400n)} SQK/day, runs until ${new Date(ends*1000).toLocaleString()})</div>`);
+      if(gainW>0n)rows.push(`<div class="s" style="margin-top:6px">After the ready merges below: <b>≈ ${units(perDay(mine+gainW))} SQK / day</b> (+${units(perDay(mine+gainW)-perDay(mine))}).</div>`);
+    }else{
+      rows.push(`<div class="v">${share(mine).toFixed(4)}% of staking power</div><div class="s">No reward stream is running right now. Mining refills it when the hamster runs; then you earn this share of it. Rewards already earned stay claimable.</div>`);
+      if(gainW>0n)rows.push(`<div class="s" style="margin-top:6px">After the ready merges below your share becomes <b>${share(mine+gainW).toFixed(4)}%</b>.</div>`);
+    }
+    if(!mine)rows.push(`<div class="s" style="margin-top:6px">Stake Squeeks or SQK to start earning: Squeeks give much more power than SQK.</div>`);
+    $('est').innerHTML=`<div class="k">Rewards estimate</div>${rows.join('')}<div class="s" style="margin-top:6px">Reward pool so far: ${units(funded)} SQK funded, ${units(paid)} paid out.</div>`;
+    $('est').style.display='';
+  }catch{$('est').style.display='none'}
 }
 
 // Merge planner: pair same-level Squeeks in the same place (wallet or staking) once both cooldowns have passed.
@@ -212,9 +295,9 @@ async function basePower(l){if(!(l in powerCache))powerCache[l]=word(await call(
 async function plan(h,s,L){
   const el=$('plan');
   if(!h.length&&!s.length){el.innerHTML='<span class="s">No Squeeks in this wallet.</span>';return}
-  el.innerHTML='<span class="s">planning…</span>';
+  el.innerHTML='<span class="s">'+SPIN+'planning…</span>';
   try{
-    const height=BigInt((await j('/v1/status')).builder.anchor.blockHeight);
+    height=BigInt((await j('/v1/status')).builder.anchor.blockHeight);
     const open=word(await call(C.collection,SEL.mergesOpen))===1n;
     const all=[...h.map(id=>({id,where:'wallet'})),...s.map(id=>({id,where:'staked'}))].filter(x=>typeof L[x.id]==='number');
     await Promise.all(all.map(async x=>{x.level=L[x.id];x.next=word(await call(C.collection,SEL.nextMergeHeight+pad(x.id)))}));
@@ -242,6 +325,8 @@ async function plan(h,s,L){
     for(let l=1;l<=MAX_LEVEL;l++){const c=cnt[l]||0;if(!c)continue;
       if(l<MAX_LEVEL){const m=Math.floor(c/2);merges+=m;cnt[l+1]=(cnt[l+1]||0)+m;if(!(l+1 in powerCache))await basePower(l+1);best+=BigInt(c%2)*powerCache[l]}else best+=BigInt(c)*powerCache[l]}
     const top=Math.max(...Object.keys(cnt).filter(k=>cnt[k]).map(Number));
+    estimate(null,null,null,ready.reduce((t,p)=>t+p.gain,0n));
+    for(const x of all){const box=document.querySelector(`.sqk[data-id="${x.id}"]`);if(box&&x.next>height){const b=document.createElement('div');b.className='cd';b.textContent='⏳ '+fmt(x.next-height);b.title='Merge cooldown: '+fmt(x.next-height)+' Squeekchain blocks left';box.append(b)}}
     el.innerHTML=`
       <div class="grid">
         <div class="card"><div class="k">Ready now</div><div class="v">${ready.length}</div><div class="s">${open?'merge pairs':'<span class="err">merges closed</span>'} · chain height ${fmt(height)}</div></div>
@@ -270,26 +355,39 @@ function buttons(){
   $('bDep').disabled=!(m&&selected('held').length);$('bWd').disabled=!(m&&selected('staked').length);
   $('bMerge').disabled=!(m&&selected('held').length===2);
 }
+async function onSepolia(){if(!eth)return false;try{const c=await eth.request({method:'eth_chainId'});$('net').style.display=c===SEPOLIA?'none':'flex';return c===SEPOLIA}catch{return false}}
+async function switchNet(){try{await eth.request({method:'wallet_switchEthereumChain',params:[{chainId:SEPOLIA}]})}catch(e){say('<span class="err">'+esc(explain(e))+'</span>')}onSepolia()}
+$('netFix').onclick=switchNet;
+async function useAccount(a){
+  me=a||null;
+  try{if(me)localStorage.setItem('sqx.connected','1');else localStorage.removeItem('sqx.connected')}catch{}
+  $('conn').textContent=me?'Connected':'Connect wallet';
+  $('me').textContent=me?short(me)+' · auto-reconnects next time':'or look up any address below';
+  if(me){$('addr').value=me;await onSepolia();await lookup(me)}else buttons();
+}
 $('conn').onclick=async()=>{
-  if(!eth)return say('<span class="err">No wallet found — install MetaMask or Rabby</span>');
-  try{
-    [me]=await eth.request({method:'eth_requestAccounts'});
-    try{await eth.request({method:'wallet_switchEthereumChain',params:[{chainId:'0xaa36a7'}]})}catch{}
-    $('me').textContent='connected '+short(me);$('addr').value=me;await lookup(me);
-  }catch(e){say('<span class="err">'+esc(e.message)+'</span>')}
+  if(!eth)return say('<span class="err">No wallet found. Install MetaMask or Rabby in this browser, then reload.</span>');
+  try{const [a]=await eth.request({method:'eth_requestAccounts'});if(!(await onSepolia()))await switchNet();await useAccount(a)}
+  catch(e){say('<span class="err">'+esc(explain(e))+'</span>')}
 };
+if(eth){
+  eth.on?.('accountsChanged',a=>useAccount(a[0]));
+  eth.on?.('chainChanged',()=>onSepolia());
+}
 async function waitTx(h){for(let i=0;i<60;i++){const r=await rpc('eth_getTransactionReceipt',[h]);if(r)return r.status==='0x1';await new Promise(r=>setTimeout(r,3000))}return false}
 async function send(to,data,label,then){
   if(!C)await events();
   try{
-    say('simulating '+esc(label)+'…');
-    try{await call(to,data,me)}catch(e){return say('<span class="err">'+esc(label)+' would revert: '+esc(e.message)+'</span>')}
+    if(!(await onSepolia()))return say('<span class="err">Switch your wallet to Sepolia first.</span>');
+    say(SPIN+'checking '+esc(label)+'…');
+    try{await call(to,data,me)}catch(e){return say('<span class="err">Can\'t '+esc(label)+': '+esc(explain(e))+'</span>')}
+    say(SPIN+'confirm '+esc(label)+' in your wallet…');
     const h=await eth.request({method:'eth_sendTransaction',params:[{from:me,to,data}]});
-    say(`${esc(label)} sent · <a href="${SCAN}/tx/${esc(h)}" target="_blank">${h.slice(0,10)}… ↗</a> · waiting…`);
+    say(`${esc(label)} sent · <a href="${SCAN}/tx/${esc(h)}" target="_blank">${h.slice(0,10)}… ↗</a> · ${SPIN}waiting for confirmation…`);
     const ok=await waitTx(h);
     say(`${esc(label)} ${ok?'<span class="okc">confirmed</span>':'<span class="err">failed</span>'} · <a href="${SCAN}/tx/${esc(h)}" target="_blank">${h.slice(0,10)}… ↗</a>`);
     if(ok){if(then)await then();else lookup(me)}
-  }catch(e){say('<span class="err">'+esc(e.message)+'</span>')}
+  }catch(e){say('<span class="err">'+esc(explain(e))+'</span>')}
 }
 async function nftApproved(){return word(await call(C.collection,SEL.isApprovedForAll+pad(me)+pad(C.staking)))===1n}
 $('bClaim').onclick=()=>send(C.staking,SEL.claim+pad(me),'claim');
@@ -310,7 +408,11 @@ $('sf').onsubmit=ev=>{ev.preventDefault();const t=$('to').value.trim(),v=$('amt'
   send(C.token,SEL.transfer+pad(t)+pad(wei(v)),'send '+v+' SQK')};
 
 status();events();setInterval(status,15000);setInterval(events,60000);
-if(location.hash.length===43){$('addr').value=location.hash.slice(1);setTimeout(()=>lookup(location.hash.slice(1)),800)}
+(async()=>{
+  let remembered=false;try{remembered=localStorage.getItem('sqx.connected')==='1'}catch{}
+  if(eth&&remembered){try{const [a]=await eth.request({method:'eth_accounts'});if(a)return useAccount(a)}catch{}}
+  if(location.hash.length===43){$('addr').value=location.hash.slice(1);lookup(location.hash.slice(1))}
+})();
 </script>
 </body>
 </html>

@@ -13,7 +13,10 @@ squeekchain-project: 76968b96-8afb-4b36-a60d-786110553b6e
 - The live deployment's contract list
 
 **Use your Squeeks** (connect MetaMask/Rabby on Sepolia)
-- See the Squeeks in your wallet and the ones you've staked, with their level
+- See your Squeeks' on-chain artwork (rendered from `tokenURI`), in your wallet and staked, with level and merge-cooldown badges; hover for traits
+- Rewards estimate: your share of all staking power, SQK per day while a reward stream runs, and how the ready merges would change it
+- Remembers your wallet and reconnects on return; warns and switches if you're not on Sepolia
+- Errors in plain English (e.g. "Squeek #5888 is on merge cooldown, 3,000 blocks to go") instead of raw revert codes
 - Stake and unstake Squeeks (`deposit` / `withdraw`, with the one-time approval handled for you)
 - Merge two Squeeks (first selected survives, second is burned into it)
 - Claim SQK rewards, claim & stake, stake SQK (approval handled), send SQK
