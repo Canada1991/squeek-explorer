@@ -1,6 +1,6 @@
 # 🐹 Squeek Explorer
 
-Live explorer and Squeek dashboard for [Squeekchain](https://squeekchain.com) on Sepolia — **https://squeekexplorer.xyz**
+A non-custodial holder tool for [Squeekchain](https://squeekchain.com) on Sepolia: plan and run merges, stake and claim, get alerts — **https://squeekexplorer.xyz**
 
 squeekchain-project: 76968b96-8afb-4b36-a60d-786110553b6e
 
