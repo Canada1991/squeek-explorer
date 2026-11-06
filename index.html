@@ -51,6 +51,7 @@ a{color:var(--blue);text-decoration:none}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
 .est{margin-top:12px}
+.sq>.s{grid-column:1/-1}
 footer{margin-top:40px;color:var(--mut);font-size:12px}
 </style>
 </head>
@@ -239,7 +240,7 @@ function pumpArt(){while(artBusy<3&&artQueue.length){const [id,box]=artQueue.shi
 const artObs='IntersectionObserver' in window?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){artObs.unobserve(e.target);artQueue.push([e.target.dataset.id,e.target]);pumpArt()}}),{rootMargin:'200px'}):null;
 function chips(el,ids,L){
   el.innerHTML=ids.length?ids.map(id=>`<div class="sqk" data-id="${esc(id)}"><div class="ph">${SPIN}</div><div class="tag"><span>#${esc(id)}</span><span class="lv">L${esc(L[id])}</span></div></div>`).join('')
-    :`<span class="s">${el.id==='held'?'No Squeeks here. Squeeks come from the Genesis mint on squeekchain.com, or from another holder.':'Nothing staked. Select Squeeks in your wallet and press Stake selected to start earning.'}</span>`;
+    :`<span class="s" style="grid-column:1/-1">${el.id==='held'?'No Squeeks here. Squeeks come from the Genesis mint on squeekchain.com, or from another holder.':'Nothing staked. Select Squeeks in your wallet and press Stake selected to start earning.'}</span>`;
   el.querySelectorAll('.sqk').forEach(c=>{c.onclick=()=>{c.classList.toggle('sel');buttons()};
     if(artObs)artObs.observe(c);else{artQueue.push([c.dataset.id,c]);pumpArt()}})}
 const selected=el=>[...$(el).querySelectorAll('.sqk.sel')].map(c=>c.dataset.id);
@@ -272,16 +273,17 @@ async function estimate(pw,so,cl,mergeGain){
   try{
     const r=await call(C.staking,'0x582c7928'),funded=word(r,0),paid=word(r,1),total=word(r,5)+word(r,6),rate=word(r,7),ends=Number(word(r,9));
     const mine=word(pw)+word(pw,1),W=10n**18n;
-    const share=x=>total?Number(x*10n**8n/total)/1e6:0;
+    const share=x=>total?Number(x*10n**12n/total)/1e10:0;
+    const pct=x=>{const v=share(x);return v===0?'0%':v>=0.01?v.toFixed(4)+'%':v.toPrecision(2)+'%'};
     const perDay=x=>total?rate*86400n*x/total:0n;
     const gainW=(mergeGain||0n)*W;
     const rows=[];
     if(rate>0n){
-      rows.push(`<div class="v">≈ ${units(perDay(mine))} SQK / day</div><div class="s">your ${share(mine).toFixed(4)}% of all staking power × the live reward stream (${units(rate*86400n)} SQK/day, runs until ${new Date(ends*1000).toLocaleString()})</div>`);
+      rows.push(`<div class="v">≈ ${units(perDay(mine))} SQK / day</div><div class="s">your ${pct(mine)} of all staking power × the live reward stream (${units(rate*86400n)} SQK/day, runs until ${new Date(ends*1000).toLocaleString()})</div>`);
       if(gainW>0n)rows.push(`<div class="s" style="margin-top:6px">After the ready merges below: <b>≈ ${units(perDay(mine+gainW))} SQK / day</b> (+${units(perDay(mine+gainW)-perDay(mine))}).</div>`);
     }else{
-      rows.push(`<div class="v">${share(mine).toFixed(4)}% of staking power</div><div class="s">No reward stream is running right now. Mining refills it when the hamster runs; then you earn this share of it. Rewards already earned stay claimable.</div>`);
-      if(gainW>0n)rows.push(`<div class="s" style="margin-top:6px">After the ready merges below your share becomes <b>${share(mine+gainW).toFixed(4)}%</b>.</div>`);
+      rows.push(`<div class="v">${pct(mine)} of staking power</div><div class="s">No reward stream is running right now. Mining refills it when the hamster runs; then you earn this share of it. Rewards already earned stay claimable.</div>`);
+      if(gainW>0n)rows.push(`<div class="s" style="margin-top:6px">After the ready merges below your share becomes <b>${pct(mine+gainW)}</b>.</div>`);
     }
     if(!mine)rows.push(`<div class="s" style="margin-top:6px">Stake Squeeks or SQK to start earning: Squeeks give much more power than SQK.</div>`);
     $('est').innerHTML=`<div class="k">Rewards estimate</div>${rows.join('')}<div class="s" style="margin-top:6px">Reward pool so far: ${units(funded)} SQK funded, ${units(paid)} paid out.</div>`;
