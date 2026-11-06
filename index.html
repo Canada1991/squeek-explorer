@@ -51,6 +51,8 @@ a{color:var(--blue);text-decoration:none}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
 .est{margin-top:12px}
+input[type=checkbox]{flex:0 0 auto;width:20px;height:20px;min-width:20px;padding:0;margin:0;accent-color:var(--gold);cursor:pointer}
+label.row{cursor:pointer;gap:10px}
 .sq>.s{grid-column:1/-1}
 footer{margin-top:40px;color:var(--mut);font-size:12px}
 </style>
@@ -96,9 +98,9 @@ footer{margin-top:40px;color:var(--mut);font-size:12px}
 <div class="card">
   <div class="s">Get a browser notification while this tab is open (it can sit in the background). Nothing leaves your browser.</div>
   <div style="display:grid;gap:8px;margin-top:10px">
-    <label class="row"><input type="checkbox" id="alHam" style="flex:0"> The hamster starts running</label>
-    <label class="row"><input type="checkbox" id="alClaim" style="flex:0"> Claimable rewards reach <input id="alClaimAmt" value="100" style="max-width:100px;flex:0 0 100px"> SQK</label>
-    <label class="row"><input type="checkbox" id="alMerge" style="flex:0"> A new merge becomes ready</label>
+    <label class="row"><input type="checkbox" id="alHam"> The hamster starts running</label>
+    <label class="row"><input type="checkbox" id="alClaim"> Claimable rewards reach <input id="alClaimAmt" value="100" style="max-width:100px;flex:0 0 100px"> SQK</label>
+    <label class="row"><input type="checkbox" id="alMerge"> A new merge becomes ready</label>
   </div>
   <div class="s" id="alS" style="margin-top:8px"></div>
 </div>
