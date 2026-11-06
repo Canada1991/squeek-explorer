@@ -1,14 +1,30 @@
 # 🐹 Squeek Explorer
 
-Live explorer for [Squeekchain](https://squeekchain.com) on Sepolia: hamster status, block height, difficulty, settled rounds, SQK supply, Squeek staking, on-chain activity feed and wallet lookup.
+Live explorer and Squeek dashboard for [Squeekchain](https://squeekchain.com) on Sepolia — **https://squeekexplorer.xyz**
 
-**Live:** https://squeekexplorer.xyz
+squeekchain-project: 76968b96-8afb-4b36-a60d-786110553b6e
 
-- Single static page, no backend, no keys.
-- Data from the public `api.squeekchain.com` + Sepolia RPC.
-- Contract addresses come from the API's live identities, so it follows testnet reinstalls automatically.
+## What it does
 
-Built by [@Canadian__Hodl](https://x.com/Canadian__Hodl) for the Squeekchain community.
+**Watch the chain**
+- Hamster status (running/idle, rpm, speed), block height and progress to the next block, difficulty, total work, last settled round
+- SQK supply, total SQK staked, Squeek supply and Squeeks burned by merges
+- Live on-chain activity feed (rewards claimed/staked, merges, deposits, checkpoints) with Blockscout links
+- The live deployment's contract list
 
-## Act
-Connect a wallet (MetaMask/Rabby) on Sepolia to claim staking rewards, claim \& stake, or send SQK. Every tx is simulated with eth_call before your wallet is asked to sign.
+**Use your Squeeks** (connect MetaMask/Rabby on Sepolia)
+- See the Squeeks in your wallet and the ones you've staked, with their level
+- Stake and unstake Squeeks (`deposit` / `withdraw`, with the one-time approval handled for you)
+- Merge two Squeeks (first selected survives, second is burned into it)
+- Claim SQK rewards, claim & stake, stake SQK (approval handled), send SQK
+- Look up any address read-only
+
+Every transaction is simulated with `eth_call` first: if it would revert you see why, and your wallet is never asked to sign it. Keys never touch the site.
+
+## Follows reinstalls on its own
+
+Contract addresses aren't hard-coded. The page reads the live deployment from `api.squeekchain.com/v1/events` and finds the token, collection, staking, dispenser, mining and core contracts wherever the API keeps them, so it kept working through the November 2026 redeploy.
+
+## Run it
+
+It's one static `index.html` with no build step and no dependencies: open it in a browser or serve the folder.

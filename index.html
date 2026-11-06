@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="squeekchain-project" content="76968b96-8afb-4b36-a60d-786110553b6e">
 <title>Squeek Explorer</title>
-<meta name="description" content="Live hamster, block height, SQK issuance and wallet lookup for Squeekchain (Sepolia).">
+<meta name="description" content="Live hamster, chain stats, and a Squeek dashboard: stake, unstake and merge Squeeks, claim and stake SQK on Squeekchain (Sepolia).">
 <style>
 :root{--bg:#121216;--card:#1b1b22;--line:#2a2a33;--fg:#ececf1;--mut:#8b8b98;--gold:#f2c14e;--blue:#6aa8ff;--ok:#4ade80;--bad:#f87171}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#f6f6f8;--card:#fff;--line:#e3e3ea;--fg:#16161c;--mut:#666673;--gold:#b7860b;--blue:#2563eb;--ok:#15803d;--bad:#b91c1c}}
@@ -21,65 +22,103 @@ h1{font-size:26px;margin:0 0 4px;letter-spacing:.5px}h1 span{color:var(--gold)}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--mut)}
 .on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
 h2{font-size:14px;text-transform:uppercase;letter-spacing:1.5px;color:var(--mut);margin:30px 0 10px}
-form{display:flex;gap:8px;flex-wrap:wrap}
+form,.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 input{flex:1;min-width:0;background:var(--card);border:1px solid var(--line);color:var(--fg);padding:10px 12px;border-radius:8px;font:inherit}
 button{background:var(--gold);color:#111;border:0;border-radius:8px;padding:10px 16px;font:inherit;font-weight:700;cursor:pointer}
+button:disabled{opacity:.4;cursor:default}
+button.ghost{background:transparent;color:var(--fg);border:1px solid var(--line);font-weight:400}
 table{width:100%;border-collapse:collapse;font-size:13px}
 td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:top}
 td:first-child{color:var(--mut);white-space:nowrap}
 a{color:var(--blue);text-decoration:none}
 .bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;background:var(--gold)}
-.err{color:var(--bad)}
+.err{color:var(--bad)}.okc{color:var(--ok)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12px;cursor:pointer;user-select:none}
+.chip.sel{border-color:var(--gold);color:var(--gold)}
+.split{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px}
 footer{margin-top:40px;color:var(--mut);font-size:12px}
 </style>
 </head>
 <body>
 <main>
 <h1>🐹 Squeek <span>Explorer</span></h1>
-<p class="sub">Live view of Squeekchain on Sepolia: the hamster, the chain, SQK and your wallet. Auto-refreshes every 15s.</p>
+<p class="sub">Live view of Squeekchain on Sepolia plus a dashboard for your Squeeks: stake, unstake, merge, claim and stake SQK. Contracts are discovered from the live deployment, so it follows reinstalls on its own.</p>
 
 <div class="grid">
   <div class="card"><div class="k">Hamster</div><div class="v" id="ham"><span class="dot"></span>…</div><div class="s" id="hamS"></div></div>
   <div class="card"><div class="k">Block height</div><div class="v" id="h">…</div><div class="bar"><i id="hp" style="width:0"></i></div><div class="s" id="hpS"></div></div>
   <div class="card"><div class="k">Total work</div><div class="v" id="w">…</div><div class="s" id="wS"></div></div>
   <div class="card"><div class="k">Settled round</div><div class="v" id="r">…</div><div class="s" id="rS"></div></div>
-  <div class="card"><div class="k">SQK supply</div><div class="v" id="sup">…</div><div class="s">minted by mining checkpoints</div></div>
-  <div class="card"><div class="k">Squeeks (Genesis)</div><div class="v" id="nft">…</div><div class="s">of 9,999</div></div>
+  <div class="card"><div class="k">SQK supply</div><div class="v" id="sup">…</div><div class="s" id="stk"></div></div>
+  <div class="card"><div class="k">Squeeks</div><div class="v" id="nft">…</div><div class="s" id="burn"></div></div>
 </div>
 
-<h2>Wallet lookup</h2>
-<form id="f"><input id="addr" placeholder="0x… wallet address" autocomplete="off" spellcheck="false"><button>Look up</button></form>
-<div class="grid" id="wal" style="margin-top:12px"></div>
-
-<h2>Act (your wallet, Sepolia)</h2>
+<h2>Your Squeeks</h2>
 <div class="card">
-  <form id="cf" onsubmit="return false"><button id="conn">Connect wallet</button><span class="s" id="me" style="align-self:center"></span></form>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-    <button id="bClaim" disabled>Claim staking rewards</button>
-    <button id="bCS" disabled>Claim &amp; stake</button>
+  <div class="row"><button id="conn">Connect wallet</button><span class="s" id="me">or look up any address below</span></div>
+  <form id="f" style="margin-top:10px"><input id="addr" placeholder="0x… wallet address" autocomplete="off" spellcheck="false"><button class="ghost">Look up</button></form>
+  <div class="grid" id="wal" style="margin-top:12px"></div>
+  <div class="split">
+    <div class="card"><div class="k">In wallet</div><div class="chips" id="held"><span class="s">–</span></div>
+      <div class="row" style="margin-top:10px"><button id="bDep" disabled>Stake selected</button><button id="bMerge" class="ghost" disabled>Merge 2 selected</button></div>
+      <div class="s" id="mergeS" style="margin-top:6px">Merge: first selected survives, second is burned into it.</div></div>
+    <div class="card"><div class="k">Staked</div><div class="chips" id="staked"><span class="s">–</span></div>
+      <div class="row" style="margin-top:10px"><button id="bWd" disabled>Unstake selected</button></div></div>
   </div>
-  <form id="sf" style="margin-top:12px"><input id="to" placeholder="send SQK to 0x…" spellcheck="false"><input id="amt" placeholder="amount" style="max-width:140px"><button id="bSend" disabled>Send SQK</button></form>
+  <div class="row" style="margin-top:12px">
+    <button id="bClaim" disabled>Claim SQK rewards</button><button id="bCS" disabled>Claim &amp; stake</button>
+  </div>
+  <form id="stf" style="margin-top:10px"><input id="stAmt" placeholder="SQK amount to stake" style="max-width:220px"><button id="bStake" disabled>Stake SQK</button></form>
+  <form id="sf" style="margin-top:10px"><input id="to" placeholder="send SQK to 0x…" spellcheck="false"><input id="amt" placeholder="amount" style="max-width:140px"><button id="bSend" disabled>Send SQK</button></form>
   <div class="s" id="tx" style="margin-top:10px">Every action is simulated first; your wallet signs, nothing is stored here.</div>
 </div>
 
 <h2>Latest on-chain activity</h2>
 <div class="card"><table id="ev"><tr><td>loading…</td></tr></table></div>
 
-<footer>Data: <a href="https://api.squeekchain.com/v1/status">api.squeekchain.com</a> + Sepolia RPC. Contracts are read from the API's live identities, not hard-coded. Built for the Squeekchain community.</footer>
+<h2>Live deployment</h2>
+<div class="card"><table id="dep"><tr><td>loading…</td></tr></table></div>
+
+<footer>Data: <a href="https://api.squeekchain.com/v1/status">api.squeekchain.com</a>, Sepolia RPC and Blockscout. Source: <a href="https://github.com/Canada1991/squeek-explorer">github.com/Canada1991/squeek-explorer</a>. Built for the Squeekchain community.</footer>
 </main>
 
 <script>
 const API='https://api.squeekchain.com', RPC='https://ethereum-sepolia-rpc.publicnode.com', SCAN='https://eth-sepolia.blockscout.com';
-let ids=null;
+let C=null, me=null, view=null;
 const $=id=>document.getElementById(id);
 const fmt=n=>Number(n).toLocaleString('en-US');
 const ago=t=>{const s=(Date.now()-new Date(t))/1e3|0;return s<60?s+'s ago':s<3600?(s/60|0)+'m ago':s<86400?(s/3600|0)+'h ago':(s/86400|0)+'d ago'};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const units=(x,d=18)=>{x=BigInt(x);const w=x/10n**BigInt(d),f=(x%10n**BigInt(d)).toString().padStart(d,'0').slice(0,2);return fmt(w)+(f!=='00'?'.'+f:'')};
-async function j(p){const r=await fetch(API+p);if(!r.ok)throw new Error(p+' '+r.status);return r.json()}
-async function call(to,data){const r=await fetch(RPC,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_call',params:[{to,data},'latest']})});const x=await r.json();if(x.error)throw new Error(x.error.message);return x.result}
-const pad=a=>a.toLowerCase().replace('0x','').padStart(64,'0');
-const SEL={totalSupply:'0x18160ddd',balanceOf:'0x70a08231'};
+const short=a=>a.slice(0,6)+'…'+a.slice(-4);
+const pad=a=>BigInt(a).toString(16).padStart(64,'0');
+const wei=s=>{const [w,f='']=s.trim().split('.');return BigInt(w||0)*10n**18n+BigInt((f+'0'.repeat(18)).slice(0,18))};
+const arr=ids=>pad(ids.length)+ids.map(pad).join('');
+const SEL={totalSupply:'0x18160ddd',balanceOf:'0x70a08231',claimable:'0x402914f5',stakeOf:'0x42623360',accountPower:'0x9624178f',
+  depositor:'0x5e020ebb',deposit:'0xa71604e8',withdraw:'0x8293744b',stake:'0xa694fc3a',level:'0x05c58df2',merge:'0xd1c2babb',
+  mergesOpen:'0x219067a0',isApprovedForAll:'0xe985e9c5',setApprovalForAll:'0xa22cb465',allowance:'0xdd62ed3e',approve:'0x095ea7b3',
+  totalStaked:'0x817b1cd2',totalBurned:'0xd89135cd',claim:'0x1e83409a',claimAndStake:'0xcb1a4fc0',transfer:'0xa9059cbb'};
+
+async function j(u){const r=await fetch(u.startsWith('http')?u:API+u);if(!r.ok)throw new Error(u+' '+r.status);return r.json()}
+async function rpc(method,params){const r=await fetch(RPC,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});const x=await r.json();if(x.error)throw new Error(x.error.message);return x.result}
+const call=(to,data,from)=>rpc('eth_call',[from?{from,to,data}:{to,data},'latest']);
+const word=(hex,i=0)=>BigInt('0x'+(hex.slice(2+64*i,66+64*i)||'0'));
+
+// Contracts: read from the live deployment, wherever the API keeps them.
+function findAddrs(o,path='',out=[]){
+  if(o&&typeof o==='object'){
+    if(typeof o.address==='string'&&/^0x[0-9a-fA-F]{40}$/.test(o.address))out.push([path,o.address.toLowerCase()]);
+    for(const [k,v] of Object.entries(o)){if(path&&(k==='code'||k==='deployment'))continue;
+      if(typeof v==='string'&&/^0x[0-9a-fA-F]{40}$/.test(v))out.push([path+'.'+k,v.toLowerCase()]);else findAddrs(v,path+'.'+k,out)}}
+  return out}
+function pick(addrs,keys){for(const k of keys)for(const [p,a] of addrs)if(p.toLowerCase().split('.').pop()===k)return a;
+  for(const k of keys)for(const [p,a] of addrs)if(p.toLowerCase().includes(k))return a;return null}
+function contracts(e){
+  const a=findAddrs(e), d=e.deployment||{};
+  return {release:d.releaseId||(e.release||{}).id||e.installationId||'?',
+    token:pick(a,['token','sqk']),collection:pick(a,['collection','genesis']),staking:pick(a,['staking']),
+    dispenser:pick(a,['dispenser','launch']),mining:pick(a,['mining']),core:pick(a,['core']),addrs:a}}
 
 async function status(){
   try{
@@ -96,76 +135,121 @@ async function status(){
 async function events(){
   try{
     const e=await j('/v1/events?category=all&limit=15');
-    ids=e.identities;
+    const prev=C&&C.release; C=contracts(e);
+    if(prev&&prev!==C.release&&view)lookup(view);
     const rows=(e.events||[]).map(x=>{
       const p=x.payload||{}, t=x.type.replace(/^\w+\./,'').replace(/_/g,' ');
       let d='';
       if(p.amountBaseUnits!==undefined)d=units(p.amountBaseUnits)+' SQK';
       else if(p.workAdded!==undefined)d='round '+p.settledThroughRound+' · +'+p.workAdded+' work';
       else if(p.tokenId!==undefined)d='Squeek #'+p.tokenId;
-      if(p.account)d+=' · '+p.account.slice(0,6)+'…'+p.account.slice(-4);
+      else if(Array.isArray(p.tokenIds))d='Squeeks #'+p.tokenIds.join(', #');
+      const who=p.account||p.owner||p.depositor||p.recipient;
+      if(who)d+=' · '+short(who);
       return `<tr><td>${ago(x.occurredAt)}</td><td>${esc(t)}</td><td>${esc(d)}</td><td><a href="${SCAN}/tx/${esc(x.source.transactionHash)}" target="_blank">tx ↗</a></td></tr>`});
     $('ev').innerHTML=rows.join('')||'<tr><td>no events</td></tr>';
+    $('dep').innerHTML=`<tr><td>release</td><td>${esc(C.release)}</td></tr>`+['token','collection','staking','dispenser','mining','core'].filter(k=>C[k])
+      .map(k=>`<tr><td>${k}</td><td><a href="${SCAN}/address/${C[k]}" target="_blank">${C[k]}</a></td></tr>`).join('');
     await supply();
   }catch(err){$('ev').innerHTML='<tr><td class="err">could not load events</td></tr>'}
 }
 async function supply(){
-  if(!ids)return;
-  try{$('sup').textContent=units(await call(ids.token,SEL.totalSupply))}catch{}
-  try{$('nft').textContent=fmt(BigInt(await call(ids.genesis,SEL.totalSupply)))}catch{}
+  if(!C)return;
+  try{$('sup').textContent=units(await call(C.token,SEL.totalSupply))}catch{}
+  try{$('stk').textContent=units(await call(C.staking,SEL.totalStaked))+' SQK staked'}catch{}
+  try{$('nft').textContent=fmt(word(await call(C.collection,SEL.totalSupply)))}catch{}
+  try{$('burn').textContent=fmt(word(await call(C.collection,SEL.totalBurned)))+' burned by merges'}catch{}
 }
-$('f').onsubmit=async ev=>{
-  ev.preventDefault();
-  const a=$('addr').value.trim();
-  if(!/^0x[0-9a-fA-F]{40}$/.test(a)){$('wal').innerHTML='<div class="card err">Enter a valid 0x address</div>';return}
-  if(!ids)await events();
+
+// Wallet: Squeeks held (Blockscout index) and Squeeks deposited in staking (transfers to staking, still credited to you).
+async function heldIds(a){
+  const ids=[];let u=`${SCAN}/api/v2/addresses/${a}/nft?type=ERC-721`;
+  for(let i=0;i<5&&u;i++){const r=await j(u);for(const x of r.items||[])if(x.token.address_hash.toLowerCase()===C.collection)ids.push(x.id);
+    u=r.next_page_params?`${SCAN}/api/v2/addresses/${a}/nft?type=ERC-721&`+new URLSearchParams(r.next_page_params):null}
+  return ids}
+async function stakedIds(a){
+  const cand=new Set();let u=`${SCAN}/api/v2/addresses/${a}/token-transfers?type=ERC-721&filter=from&token=${C.collection}`;
+  for(let i=0;i<5&&u;i++){const r=await j(u);for(const t of r.items||[])if(t.to.hash.toLowerCase()===C.staking)cand.add(t.total.token_id);
+    u=r.next_page_params?`${SCAN}/api/v2/addresses/${a}/token-transfers?type=ERC-721&filter=from&token=${C.collection}&`+new URLSearchParams(r.next_page_params):null}
+  const out=[];
+  await Promise.all([...cand].map(async id=>{try{const d=await call(C.staking,SEL.depositor+pad(C.collection)+pad(id));if(word(d)===BigInt(a))out.push(id)}catch{}}));
+  return out.sort((x,y)=>x-y)}
+async function levels(ids){const L={};await Promise.all(ids.map(async id=>{try{L[id]=Number(word(await call(C.collection,SEL.level+pad(id))))}catch{L[id]='?'}}));return L}
+function chips(el,ids,L){el.innerHTML=ids.length?ids.map(id=>`<span class="chip" data-id="${esc(id)}">#${esc(id)} · L${esc(L[id])}</span>`).join(''):'<span class="s">none</span>';
+  el.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{c.classList.toggle('sel');buttons()})}
+const selected=el=>[...$(el).querySelectorAll('.chip.sel')].map(c=>c.dataset.id);
+
+async function lookup(a){
+  view=a;if(!C)await events();
   $('wal').innerHTML='<div class="card">reading chain…</div>';
   history.replaceState(null,'','#'+a);
   try{
-    const bal=d=>SEL.balanceOf+pad(a);
-    const [sqk,nft,staked]=await Promise.all([call(ids.token,bal()),call(ids.genesis,bal()),
-      call(ids.genesis,SEL.balanceOf+pad(ids.staking.proxy)).catch(()=>null)]);
+    const [sqk,nft,cl,so,pw]=await Promise.all([call(C.token,SEL.balanceOf+pad(a)),call(C.collection,SEL.balanceOf+pad(a)),
+      call(C.staking,SEL.claimable+pad(a)).catch(()=>null),call(C.staking,SEL.stakeOf+pad(a)).catch(()=>null),call(C.staking,SEL.accountPower+pad(a)).catch(()=>null)]);
     $('wal').innerHTML=`
-      <div class="card"><div class="k">Squeeks held</div><div class="v">${fmt(BigInt(nft))}</div><div class="s">in this wallet (staked ones sit in the staking contract)</div></div>
-      <div class="card"><div class="k">SQK balance</div><div class="v">${units(sqk)}</div><div class="s">testnet SQK</div></div>
-      <div class="card"><div class="k">Network staked</div><div class="v">${staked?fmt(BigInt(staked)):'–'}</div><div class="s">Squeeks deposited in staking</div></div>
-      <div class="card"><div class="k">Explorer</div><div class="v" style="font-size:14px"><a href="${SCAN}/address/${a}" target="_blank">${a.slice(0,8)}…${a.slice(-6)} ↗</a></div></div>`;
+      <div class="card"><div class="k">SQK balance</div><div class="v">${units(sqk)}</div><div class="s"><a href="${SCAN}/address/${a}" target="_blank">${short(a)} ↗</a></div></div>
+      <div class="card"><div class="k">SQK staked</div><div class="v">${so?units(word(so)):'–'}</div><div class="s">in the staking contract</div></div>
+      <div class="card"><div class="k">Claimable</div><div class="v">${cl?units(cl):'–'}</div><div class="s">SQK rewards ready to claim</div></div>
+      <div class="card"><div class="k">Staking power</div><div class="v">${pw?units(word(pw)):'–'}</div><div class="s">${fmt(word(nft))} Squeeks in wallet</div></div>`;
+    const [h,s]=await Promise.all([heldIds(a),stakedIds(a)]);
+    const L=await levels([...h,...s]);
+    chips($('held'),h,L);chips($('staked'),s,L);buttons();
   }catch(e){$('wal').innerHTML='<div class="card err">'+esc(e.message)+'</div>'}
-};
-let me=null;
+}
+$('f').onsubmit=ev=>{ev.preventDefault();const a=$('addr').value.trim();
+  if(!/^0x[0-9a-fA-F]{40}$/.test(a)){$('wal').innerHTML='<div class="card err">Enter a valid 0x address</div>';return}lookup(a)};
+
+// Actions: simulate, then the connected wallet signs.
 const eth=window.ethereum;
 const say=h=>$('tx').innerHTML=h;
-const wei=s=>{const [w,f='']=s.trim().split('.');return BigInt(w||0)*10n**18n+BigInt((f+'0'.repeat(18)).slice(0,18))};
+const mine=()=>me&&view&&view.toLowerCase()===me.toLowerCase();
+function buttons(){
+  const c=!!me, m=mine();
+  ['bClaim','bCS','bStake','bSend'].forEach(b=>$(b).disabled=!c);
+  $('bDep').disabled=!(m&&selected('held').length);$('bWd').disabled=!(m&&selected('staked').length);
+  $('bMerge').disabled=!(m&&selected('held').length===2);
+}
 $('conn').onclick=async()=>{
   if(!eth)return say('<span class="err">No wallet found — install MetaMask or Rabby</span>');
   try{
     [me]=await eth.request({method:'eth_requestAccounts'});
     try{await eth.request({method:'wallet_switchEthereumChain',params:[{chainId:'0xaa36a7'}]})}catch{}
-    $('me').textContent=me.slice(0,6)+'…'+me.slice(-4);
-    ['bClaim','bCS','bSend'].forEach(b=>$(b).disabled=false);
-    $('addr').value=me;$('f').requestSubmit();
+    $('me').textContent='connected '+short(me);$('addr').value=me;await lookup(me);
   }catch(e){say('<span class="err">'+esc(e.message)+'</span>')}
 };
-async function send(to,data,label){
-  if(!ids)await events();
+async function waitTx(h){for(let i=0;i<60;i++){const r=await rpc('eth_getTransactionReceipt',[h]);if(r)return r.status==='0x1';await new Promise(r=>setTimeout(r,3000))}return false}
+async function send(to,data,label,then){
+  if(!C)await events();
   try{
     say('simulating '+esc(label)+'…');
-    const r=await fetch(RPC,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_call',params:[{from:me,to,data},'latest']})}).then(r=>r.json());
-    if(r.error)return say('<span class="err">'+esc(label)+' would revert: '+esc(r.error.message)+'</span>');
+    try{await call(to,data,me)}catch(e){return say('<span class="err">'+esc(label)+' would revert: '+esc(e.message)+'</span>')}
     const h=await eth.request({method:'eth_sendTransaction',params:[{from:me,to,data}]});
-    say(`${esc(label)} sent · <a href="${SCAN}/tx/${esc(h)}" target="_blank">${h.slice(0,10)}… ↗</a>`);
+    say(`${esc(label)} sent · <a href="${SCAN}/tx/${esc(h)}" target="_blank">${h.slice(0,10)}… ↗</a> · waiting…`);
+    const ok=await waitTx(h);
+    say(`${esc(label)} ${ok?'<span class="okc">confirmed</span>':'<span class="err">failed</span>'} · <a href="${SCAN}/tx/${esc(h)}" target="_blank">${h.slice(0,10)}… ↗</a>`);
+    if(ok){if(then)await then();else lookup(me)}
   }catch(e){say('<span class="err">'+esc(e.message)+'</span>')}
 }
-$('bClaim').onclick=()=>send(ids.staking.proxy,'0x1e83409a'+pad(me),'claim');
-$('bCS').onclick=()=>send(ids.staking.proxy,'0xcb1a4fc0','claim & stake');
-$('sf').onsubmit=ev=>{
-  ev.preventDefault();
-  const t=$('to').value.trim();
-  if(!/^0x[0-9a-fA-F]{40}$/.test(t)||!/^\d+(\.\d+)?$/.test($('amt').value.trim()))return say('<span class="err">Enter a valid address and amount</span>');
-  send(ids.token,'0xa9059cbb'+pad(t)+wei($('amt').value).toString(16).padStart(64,'0'),'send SQK');
-};
+async function nftApproved(){return word(await call(C.collection,SEL.isApprovedForAll+pad(me)+pad(C.staking)))===1n}
+$('bClaim').onclick=()=>send(C.staking,SEL.claim+pad(me),'claim');
+$('bCS').onclick=()=>send(C.staking,SEL.claimAndStake,'claim & stake');
+$('bDep').onclick=async()=>{const ids=selected('held'),dep=()=>send(C.staking,SEL.deposit+pad(C.collection)+pad(64)+arr(ids),'stake Squeeks #'+ids.join(', #'));
+  if(await nftApproved())dep();else send(C.collection,SEL.setApprovalForAll+pad(C.staking)+pad(1),'approve staking for Squeeks',dep)};
+$('bWd').onclick=()=>{const ids=selected('staked');send(C.staking,SEL.withdraw+pad(C.collection)+pad(64)+arr(ids),'unstake Squeeks #'+ids.join(', #'))};
+$('bMerge').onclick=async()=>{const [a,b]=selected('held');
+  try{if(word(await call(C.collection,SEL.mergesOpen))!==1n)return say('<span class="err">Merges are closed right now</span>')}catch{}
+  if(confirm(`Merge Squeek #${b} into #${a}? #${b} is burned.`))send(C.collection,SEL.merge+pad(a)+pad(b),`merge #${b} into #${a}`)};
+$('stf').onsubmit=async ev=>{ev.preventDefault();const v=$('stAmt').value.trim();
+  if(!/^\d+(\.\d+)?$/.test(v))return say('<span class="err">Enter an amount</span>');
+  const amt=wei(v),st=()=>send(C.staking,SEL.stake+pad(amt),'stake '+v+' SQK');
+  const al=word(await call(C.token,SEL.allowance+pad(me)+pad(C.staking)));
+  if(al>=amt)st();else send(C.token,SEL.approve+pad(C.staking)+pad(amt),'approve '+v+' SQK',st)};
+$('sf').onsubmit=ev=>{ev.preventDefault();const t=$('to').value.trim(),v=$('amt').value.trim();
+  if(!/^0x[0-9a-fA-F]{40}$/.test(t)||!/^\d+(\.\d+)?$/.test(v))return say('<span class="err">Enter a valid address and amount</span>');
+  send(C.token,SEL.transfer+pad(t)+pad(wei(v)),'send '+v+' SQK')};
+
 status();events();setInterval(status,15000);setInterval(events,60000);
-if(location.hash.length===43){$('addr').value=location.hash.slice(1);setTimeout(()=>$('f').requestSubmit(),800)}
+if(location.hash.length===43){$('addr').value=location.hash.slice(1);setTimeout(()=>lookup(location.hash.slice(1)),800)}
 </script>
 </body>
 </html>
