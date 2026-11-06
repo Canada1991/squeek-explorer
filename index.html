@@ -5,7 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="squeekchain-project" content="76968b96-8afb-4b36-a60d-786110553b6e">
 <title>Squeek Explorer</title>
-<meta name="description" content="Live hamster, chain stats, and a Squeek dashboard: stake, unstake and merge Squeeks, claim and stake SQK on Squeekchain (Sepolia).">
+<meta property="og:title" content="Squeek Explorer">
+<meta property="og:description" content="Your Squeeks, staked, merged and earning. Merge planner, rewards estimate and alerts for Squeekchain holders.">
+<meta property="og:image" content="https://squeekexplorer.xyz/og.png">
+<meta property="og:url" content="https://squeekexplorer.xyz/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:creator" content="@Canadian__Hodl">
+<meta name="theme-color" content="#121216">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐹</text></svg>">
+<meta name="description" content="Your Squeeks, staked, merged and earning. Merge planner, rewards estimate and alerts for Squeekchain holders.">
 <style>
 :root{--bg:#121216;--card:#1b1b22;--line:#2a2a33;--fg:#ececf1;--mut:#8b8b98;--gold:#f2c14e;--blue:#6aa8ff;--ok:#4ade80;--bad:#f87171}
 @media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--bg:#f6f6f8;--card:#fff;--line:#e3e3ea;--fg:#16161c;--mut:#666673;--gold:#b7860b;--blue:#2563eb;--ok:#15803d;--bad:#b91c1c}}
@@ -50,6 +59,16 @@ a{color:var(--blue);text-decoration:none}
 .banner button{background:#fff;color:#111}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:6px}
 @keyframes sp{to{transform:rotate(360deg)}}
+.hero{padding:28px 0 8px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.hero h1{font-size:40px;margin:10px 0 6px}
+.lead{font-size:18px;margin:0;max-width:640px}
+.pill{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12px;color:var(--mut)}
+button.big{padding:13px 22px;font-size:16px}
+.feat{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:22px}
+.feat div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:4px}
+.feat span{color:var(--mut);font-size:13px}
+.stats .v{font-size:20px}
+@media (max-width:600px){.hero h1{font-size:30px}.lead{font-size:16px}button.big{flex:1}}
 .est{margin-top:12px}
 input[type=checkbox]{flex:0 0 auto;width:20px;height:20px;min-width:20px;padding:0;margin:0;accent-color:var(--gold);cursor:pointer}
 label.row{cursor:pointer;gap:10px}
@@ -59,21 +78,25 @@ footer{margin-top:40px;color:var(--mut);font-size:12px}
 </head>
 <body>
 <main>
-<h1>🐹 Squeek <span>Explorer</span></h1>
-<p class="sub">Live view of Squeekchain on Sepolia plus a dashboard for your Squeeks: stake, unstake, merge, claim and stake SQK. Contracts are discovered from the live deployment, so it follows reinstalls on its own.</p>
+<header class="hero">
+  <div class="pill" id="heroHam"><span class="dot"></span>checking the hamster…</div>
+  <h1>🐹 Squeek <span>Explorer</span></h1>
+  <p class="lead">Your Squeeks, staked, merged and earning. One dashboard for Squeekchain holders.</p>
+  <div class="row" style="margin-top:18px">
+    <button id="heroConn" class="big">Connect wallet</button>
+    <button id="heroDemo" class="ghost big">Try a demo wallet</button>
+  </div>
+  <div class="feat">
+    <div><b>🧬 Merge planner</b><span>Finds pairs ready to merge, the power each adds, and merges them all in one go.</span></div>
+    <div><b>📈 Rewards estimate</b><span>Your share of staking power and SQK per day, before and after merging.</span></div>
+    <div><b>🔔 Alerts</b><span>A ping when the hamster runs, rewards pile up or a merge is ready.</span></div>
+  </div>
+  <p class="s" style="margin-top:14px">Non-custodial: every transaction is simulated first and signed in your own wallet. Runs on Squeekchain's live Sepolia contracts.</p>
+</header>
 
 <div class="banner" id="net">⚠️ Your wallet is on the wrong network. Squeekchain runs on Sepolia. <button id="netFix">Switch to Sepolia</button></div>
 
-<div class="grid">
-  <div class="card"><div class="k">Hamster</div><div class="v" id="ham"><span class="dot"></span>…</div><div class="s" id="hamS"></div></div>
-  <div class="card"><div class="k">Block height</div><div class="v" id="h">…</div><div class="bar"><i id="hp" style="width:0"></i></div><div class="s" id="hpS"></div></div>
-  <div class="card"><div class="k">Total work</div><div class="v" id="w">…</div><div class="s" id="wS"></div></div>
-  <div class="card"><div class="k">Settled round</div><div class="v" id="r">…</div><div class="s" id="rS"></div></div>
-  <div class="card"><div class="k">SQK supply</div><div class="v" id="sup">…</div><div class="s" id="stk"></div></div>
-  <div class="card"><div class="k">Squeeks</div><div class="v" id="nft">…</div><div class="s" id="burn"></div></div>
-</div>
-
-<h2>Your Squeeks</h2>
+<h2 id="you">Your Squeeks</h2>
 <div class="card">
   <div class="row"><button id="conn">Connect wallet</button><span class="s" id="me">or look up any address below</span></div>
   <form id="f" style="margin-top:10px"><input id="addr" placeholder="0x… wallet address" autocomplete="off" spellcheck="false"><button class="ghost">Look up</button></form>
@@ -94,6 +117,12 @@ footer{margin-top:40px;color:var(--mut);font-size:12px}
   <div class="s" id="tx" style="margin-top:10px">Every action is simulated first; your wallet signs, nothing is stored here.</div>
 </div>
 
+<h2>Merge planner</h2>
+<div class="card">
+  <div class="s">Same-level Squeeks past their cooldown can merge: the survivor goes up a level and the donor burns. Every merge adds staking power. Staked Squeeks merge in place, no unstaking. Look up a wallet above to plan.</div>
+  <div id="plan" style="margin-top:10px"><span class="s">–</span></div>
+</div>
+
 <h2>Alerts</h2>
 <div class="card">
   <div class="s">Get a browser notification while this tab is open (it can sit in the background). Nothing leaves your browser.</div>
@@ -105,10 +134,14 @@ footer{margin-top:40px;color:var(--mut);font-size:12px}
   <div class="s" id="alS" style="margin-top:8px"></div>
 </div>
 
-<h2>Merge planner</h2>
-<div class="card">
-  <div class="s">Same-level Squeeks past their cooldown can merge: the survivor goes up a level and the donor burns. Every merge adds staking power. Staked Squeeks merge in place, no unstaking. Look up a wallet above to plan.</div>
-  <div id="plan" style="margin-top:10px"><span class="s">–</span></div>
+<h2>Chain</h2>
+<div class="grid stats">
+  <div class="card"><div class="k">Hamster</div><div class="v" id="ham"><span class="dot"></span>…</div><div class="s" id="hamS"></div></div>
+  <div class="card"><div class="k">Block height</div><div class="v" id="h">…</div><div class="bar"><i id="hp" style="width:0"></i></div><div class="s" id="hpS"></div></div>
+  <div class="card"><div class="k">Total work</div><div class="v" id="w">…</div><div class="s" id="wS"></div></div>
+  <div class="card"><div class="k">Settled round</div><div class="v" id="r">…</div><div class="s" id="rS"></div></div>
+  <div class="card"><div class="k">SQK supply</div><div class="v" id="sup">…</div><div class="s" id="stk"></div></div>
+  <div class="card"><div class="k">Squeeks</div><div class="v" id="nft">…</div><div class="s" id="burn"></div></div>
 </div>
 
 <h2>Latest on-chain activity</h2>
@@ -117,7 +150,10 @@ footer{margin-top:40px;color:var(--mut);font-size:12px}
 <h2>Live deployment</h2>
 <div class="card"><table id="dep"><tr><td>loading…</td></tr></table></div>
 
-<footer>Data: <a href="https://api.squeekchain.com/v1/status">api.squeekchain.com</a>, Sepolia RPC and Blockscout. Source: <a href="https://github.com/Canada1991/squeek-explorer">github.com/Canada1991/squeek-explorer</a>. Built for the Squeekchain community.</footer>
+<footer>
+  <div>Built by <a href="https://x.com/Canadian__Hodl" target="_blank">@Canadian__Hodl</a> for the Squeekchain community · <a href="https://github.com/Canada1991/squeek-explorer" target="_blank">Source on GitHub</a></div>
+  <div style="margin-top:4px">Data: <a href="https://api.squeekchain.com/v1/status">api.squeekchain.com</a>, Sepolia RPC and Blockscout. Not affiliated with the Squeekchain team.</div>
+</footer>
 </main>
 
 <script>
@@ -188,6 +224,7 @@ async function status(){
     const s=await j('/v1/status'), m=s.measurement, a=s.builder.anchor;
     const live=m.freshness==='online'&&m.rpmMilli>0;
     checkAlerts(live);
+    $('heroHam').innerHTML=`<span class="dot ${live?'on':''}"></span>${live?'Squeektoshi is running · rewards flowing':'Squeektoshi is sleeping · block '+fmt(a.blockHeight)}`;
     $('ham').innerHTML=`<span class="dot ${live?'on':''}"></span>${live?'RUNNING':esc(m.coreStatus||'IDLE')}`;
     $('hamS').textContent=`${(m.rpmMilli/1000).toFixed(1)} rpm · ${(m.speedMmPerSecond/10).toFixed(1)} cm/s · seen ${ago(m.observedAt)}`;
     $('h').textContent=fmt(a.blockHeight);height=BigInt(a.blockHeight);
@@ -436,10 +473,13 @@ function buttons(){
 async function onSepolia(){if(!eth)return false;try{const c=await eth.request({method:'eth_chainId'});$('net').style.display=c===SEPOLIA?'none':'flex';return c===SEPOLIA}catch{return false}}
 async function switchNet(){try{await eth.request({method:'wallet_switchEthereumChain',params:[{chainId:SEPOLIA}]})}catch(e){say('<span class="err">'+esc(explain(e))+'</span>')}onSepolia()}
 $('netFix').onclick=switchNet;
+const DEMO='0x3b85016F79a8605f13364Ac451CAc4F3a9ADC67b';
+$('heroConn').onclick=()=>{$('you').scrollIntoView({behavior:'smooth'});$('conn').click()};
+$('heroDemo').onclick=()=>{$('addr').value=DEMO;$('you').scrollIntoView({behavior:'smooth'});lookup(DEMO);say('Showing a demo wallet with 18 Squeeks. Connect your own wallet to act.')};
 async function useAccount(a){
   me=a||null;
   try{if(me)localStorage.setItem('sqx.connected','1');else localStorage.removeItem('sqx.connected')}catch{}
-  $('conn').textContent=me?'Connected':'Connect wallet';
+  $('conn').textContent=me?'Connected':'Connect wallet';$('heroConn').textContent=me?'Connected · '+short(me):'Connect wallet';
   $('me').textContent=me?short(me)+' · auto-reconnects next time':'or look up any address below';
   if(me){$('addr').value=me;await onSepolia();await lookup(me)}else buttons();
 }
